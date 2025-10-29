@@ -1,0 +1,40 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: school-app-backend
+  
+  # Database Configuration (Supabase PostgreSQL)
+  # Override these with your actual Supabase credentials
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true  # Enable SQL logging for local development
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+# Supabase Configuration
+# Override these with your actual Supabase credentials
+supabase:
+  url: ${SUPABASE_URL:https://your-project.supabase.co}
+  service-key: ${SUPABASE_SERVICE_KEY:your-service-key}
+  anon-key: ${SUPABASE_ANON_KEY:your-anon-key}
+
+logging:
+  level:
+    com.educollab: DEBUG  # More verbose logging for local development
+    org.springframework: INFO
+    org.hibernate: INFO  # Show SQL queries
+    root: INFO
+

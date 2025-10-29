@@ -1,0 +1,25 @@
+# Ignore Docker files to force Nixpacks
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Ignore build artifacts
+target/
+*.jar
+*.war
+*.ear
+*.class
+
+# Ignore IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore logs
+*.log
