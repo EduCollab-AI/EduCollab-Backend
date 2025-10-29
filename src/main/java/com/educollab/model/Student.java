@@ -18,7 +18,7 @@ public class Student {
     private String name;
     
     @Column(name = "institution_id")
-    private Integer institutionId;
+    private UUID institutionId;
     
     // Removed parent contact columns to match DB schema
     
@@ -62,11 +62,11 @@ public class Student {
         this.name = name;
     }
     
-    public Integer getInstitutionId() {
+    public UUID getInstitutionId() {
         return institutionId;
     }
     
-    public void setInstitutionId(Integer institutionId) {
+    public void setInstitutionId(UUID institutionId) {
         this.institutionId = institutionId;
     }
     
