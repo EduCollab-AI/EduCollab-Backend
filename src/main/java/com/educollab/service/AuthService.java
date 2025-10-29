@@ -313,12 +313,35 @@ public class AuthService {
             System.out.println("🔑 Authenticating with Supabase using email: " + loginEmail);
             
             WebClient webClient = supabaseConfig.supabaseWebClient();
-            Map<String, Object> authResponse = webClient.post()
-                .uri("/auth/v1/token?grant_type=password")
-                .bodyValue(authRequest)
-                .retrieve()
-                .bodyToMono(Map.class)
-                .block();
+            Map<String, Object> authResponse;
+            try {
+                authResponse = webClient.post()
+                    .uri("/auth/v1/token?grant_type=password")
+                    .bodyValue(authRequest)
+                    .retrieve()
+                    .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
+                        response -> {
+                            System.err.println("========================================");
+                            System.err.println("❌ Supabase Auth API HTTP Error:");
+                            System.err.println("Status Code: " + response.statusCode());
+                            return response.bodyToMono(String.class)
+                                .flatMap(body -> {
+                                    System.err.println("Error Response Body: " + body);
+                                    System.err.println("========================================");
+                                    return Mono.error(new RuntimeException("Supabase Auth API error " + response.statusCode() + ": " + body));
+                                });
+                        })
+                    .bodyToMono(Map.class)
+                    .block();
+            } catch (Exception e) {
+                System.err.println("========================================");
+                System.err.println("❌ Exception calling Supabase Auth API:");
+                System.err.println("Exception: " + e.getMessage());
+                System.err.println("Exception Type: " + e.getClass().getName());
+                e.printStackTrace();
+                System.err.println("========================================");
+                throw new RuntimeException("Failed to authenticate with Supabase: " + e.getMessage(), e);
+            }
             
             if (authResponse == null || authResponse.get("user") == null) {
                 throw new RuntimeException("Invalid credentials");
