@@ -75,8 +75,23 @@ public class DatabaseConfig {
         config.setMaximumPoolSize(5);
         config.setMinimumIdle(1);
         config.setInitializationFailTimeout(-1);
+        
+        // Connection validation settings
+        config.setConnectionTestQuery("SELECT 1");
+        config.setValidationTimeout(5000);
+        config.setMaxLifetime(600000); // 10 minutes
+        config.setIdleTimeout(300000); // 5 minutes
+        
+        // Connection leak detection
+        config.setLeakDetectionThreshold(60000); // 60 seconds
+        
         // Disable autocommit so Hibernate can manage transactions
         config.setAutoCommit(false);
+        
+        // Register shutdown hook to close connections properly
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Shutting down database connection pool...");
+        }));
         
         return new HikariDataSource(config);
     }

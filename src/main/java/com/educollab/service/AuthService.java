@@ -7,8 +7,8 @@ import com.educollab.repository.UserRepository;
 import com.educollab.repository.StudentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.util.UriBuilder;
 import reactor.core.publisher.Mono;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
@@ -29,6 +29,7 @@ public class AuthService {
     @Autowired
     private StudentRepository studentRepository;
     
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> register(Map<String, Object> request) {
         try {
             // Step 1: Register user in Supabase Auth
@@ -273,6 +274,7 @@ public class AuthService {
         }
     }
     
+    @Transactional(readOnly = true)
     public Map<String, Object> login(Map<String, Object> request) {
         try {
             // Call Supabase Auth API for login
@@ -344,6 +346,7 @@ public class AuthService {
         }
     }
     
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> addChild(Map<String, Object> request) {
         try {
             String name = (String) request.get("name");
