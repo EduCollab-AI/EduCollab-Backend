@@ -26,7 +26,7 @@ public class Student {
     @Column(name = "parent_phone")
     private String parentPhone;
     
-    @Column(name = "birth_date")
+    @Column(name = "birthdate")
     private LocalDate birthDate;
     
     @Column(name = "associated_parent_id")
