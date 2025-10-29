@@ -372,6 +372,7 @@ public class AuthService {
             
             // Create student record
             Student student = new Student();
+            student.setId(UUID.randomUUID()); // Manual UUID generation as fallback
             student.setName(name);
             student.setAssociatedParentId(parentId);
             student.setIsAssociated(isAssociated);
