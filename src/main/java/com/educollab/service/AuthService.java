@@ -328,6 +328,12 @@ public class AuthService {
                                 .flatMap(body -> {
                                     System.err.println("Error Response Body: " + body);
                                     System.err.println("========================================");
+                                    
+                                    // Check if it's an email not confirmed error
+                                    if (body != null && body.contains("email_not_confirmed")) {
+                                        return Mono.error(new RuntimeException("Email not confirmed. Please check your email and click the confirmation link."));
+                                    }
+                                    
                                     return Mono.error(new RuntimeException("Supabase Auth API error " + response.statusCode() + ": " + body));
                                 });
                         })
