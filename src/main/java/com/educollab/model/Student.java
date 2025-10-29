@@ -20,11 +20,7 @@ public class Student {
     @Column(name = "institution_id")
     private Integer institutionId;
     
-    @Column(name = "parent_email")
-    private String parentEmail;
-    
-    @Column(name = "parent_phone")
-    private String parentPhone;
+    // Removed parent contact columns to match DB schema
     
     @Column(name = "birthdate")
     private LocalDate birthDate;
@@ -74,21 +70,7 @@ public class Student {
         this.institutionId = institutionId;
     }
     
-    public String getParentEmail() {
-        return parentEmail;
-    }
-    
-    public void setParentEmail(String parentEmail) {
-        this.parentEmail = parentEmail;
-    }
-    
-    public String getParentPhone() {
-        return parentPhone;
-    }
-    
-    public void setParentPhone(String parentPhone) {
-        this.parentPhone = parentPhone;
-    }
+    // parentEmail/parentPhone not present in database
     
     public LocalDate getBirthDate() {
         return birthDate;
