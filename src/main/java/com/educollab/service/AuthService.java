@@ -277,10 +277,40 @@ public class AuthService {
     @Transactional(readOnly = true)
     public Map<String, Object> login(Map<String, Object> request) {
         try {
-            // Call Supabase Auth API for login
+            // Extract login credentials - support both email and phone
+            String email = (String) request.get("email");
+            String phone = (String) request.get("phone");
+            String password = (String) request.get("password");
+            String requestedRole = (String) request.get("role");
+            
+            System.out.println("========================================");
+            System.out.println("🔐 Login Request:");
+            System.out.println("Email: " + email);
+            System.out.println("Phone: " + phone);
+            System.out.println("Requested Role: " + requestedRole);
+            System.out.println("========================================");
+            
+            // Validate that either email or phone is provided
+            if ((email == null || email.isEmpty()) && (phone == null || phone.isEmpty())) {
+                throw new RuntimeException("Either email or phone must be provided");
+            }
+            
+            // If phone is provided but not email, we need to find the user's email first
+            String loginEmail = email;
+            if (email == null || email.isEmpty()) {
+                System.out.println("📱 Phone login detected, looking up email by phone...");
+                User phoneUser = userRepository.findByPhone(phone)
+                    .orElseThrow(() -> new RuntimeException("No user found with this phone number"));
+                loginEmail = phoneUser.getEmail();
+                System.out.println("✅ Found email: " + loginEmail + " for phone: " + phone);
+            }
+            
+            // Call Supabase Auth API for login (Supabase only supports email/password)
             Map<String, Object> authRequest = new HashMap<>();
-            authRequest.put("email", request.get("email"));
-            authRequest.put("password", request.get("password"));
+            authRequest.put("email", loginEmail);
+            authRequest.put("password", password);
+            
+            System.out.println("🔑 Authenticating with Supabase using email: " + loginEmail);
             
             WebClient webClient = supabaseConfig.supabaseWebClient();
             Map<String, Object> authResponse = webClient.post()
@@ -291,7 +321,7 @@ public class AuthService {
                 .block();
             
             if (authResponse == null || authResponse.get("user") == null) {
-                throw new RuntimeException("Invalid email or password");
+                throw new RuntimeException("Invalid credentials");
             }
             
             // Get user from database
@@ -299,6 +329,22 @@ public class AuthService {
             String userId = (String) supabaseUser.get("id");
             User user = userRepository.findById(UUID.fromString(userId))
                 .orElseThrow(() -> new RuntimeException("User profile not found"));
+            
+            System.out.println("✅ User found in database:");
+            System.out.println("  ID: " + user.getId());
+            System.out.println("  Email: " + user.getEmail());
+            System.out.println("  Role: " + user.getRole());
+            
+            // Validate role if provided
+            if (requestedRole != null && !requestedRole.isEmpty()) {
+                if (!requestedRole.equalsIgnoreCase(user.getRole())) {
+                    System.err.println("❌ Role mismatch:");
+                    System.err.println("  Expected: " + requestedRole);
+                    System.err.println("  Actual: " + user.getRole());
+                    throw new RuntimeException("Invalid role for this account. Expected: " + requestedRole + ", but account is: " + user.getRole());
+                }
+                System.out.println("✅ Role validated: " + user.getRole());
+            }
             
             // Build response
             Map<String, Object> response = new HashMap<>();
@@ -310,6 +356,9 @@ public class AuthService {
             userData.put("email", user.getEmail());
             userData.put("name", user.getName());
             userData.put("role", user.getRole());
+            if (user.getPhone() != null) {
+                userData.put("phone", user.getPhone());
+            }
             
             Map<String, Object> data = new HashMap<>();
             data.put("user", userData);
