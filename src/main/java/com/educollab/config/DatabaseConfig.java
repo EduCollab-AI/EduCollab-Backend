@@ -46,16 +46,25 @@ public class DatabaseConfig {
                     }
                     
                     // Build JDBC URL without credentials
-                    jdbcUrl = "jdbc:postgresql://" + hostAndDb;
+                    // Add parameters to fix prepared statement caching issues with Supabase
+                    String params = hostAndDb.contains("?") ? "&" : "?";
+                    params += "prepareThreshold=0&reWriteBatchedInserts=true";
+                    jdbcUrl = "jdbc:postgresql://" + hostAndDb + params;
                     System.out.println("Parsed credentials from DATABASE_URL");
                 } else {
                     // No credentials in URL, convert to JDBC format
-                    jdbcUrl = "jdbc:" + jdbcUrl;
+                    // Add parameters to fix prepared statement caching issues with Supabase
+                    String params = jdbcUrl.contains("?") ? "&" : "?";
+                    params += "prepareThreshold=0&reWriteBatchedInserts=true";
+                    jdbcUrl = "jdbc:" + jdbcUrl + params;
                 }
             } catch (Exception e) {
                 System.err.println("Error parsing DATABASE_URL: " + e.getMessage());
                 // Fallback: just add jdbc: prefix
-                jdbcUrl = "jdbc:" + jdbcUrl;
+                // Add parameters to fix prepared statement caching issues with Supabase
+                String params = jdbcUrl.contains("?") ? "&" : "?";
+                params += "prepareThreshold=0&reWriteBatchedInserts=true";
+                jdbcUrl = "jdbc:" + jdbcUrl + params;
             }
         }
         
