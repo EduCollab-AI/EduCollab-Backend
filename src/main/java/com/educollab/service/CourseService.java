@@ -52,6 +52,7 @@ public class CourseService {
             System.out.println("Location: " + location);
             System.out.println("Total Sessions: " + totalSessions);
             System.out.println("Course Start Date: " + courseStartDateStr);
+            System.out.println("Description: " + description);
             
             // Parse course start date
             LocalDate courseStartDate = LocalDate.parse(courseStartDateStr);
