@@ -81,15 +81,18 @@ public class DatabaseConfig {
         config.setPassword(dbPassword);
         config.setDriverClassName("org.postgresql.Driver");
         config.setConnectionTimeout(30000);
-        config.setMaximumPoolSize(5);
+        
+        // Reduced pool size for Supabase free tier (15 connections max)
+        // Keep it conservative to avoid hitting limits
+        config.setMaximumPoolSize(2); // Very conservative
         config.setMinimumIdle(1);
         config.setInitializationFailTimeout(-1);
         
         // Connection validation settings
         config.setConnectionTestQuery("SELECT 1");
         config.setValidationTimeout(5000);
-        config.setMaxLifetime(600000); // 10 minutes
-        config.setIdleTimeout(300000); // 5 minutes
+        config.setMaxLifetime(300000); // 5 minutes - shorter lifetime to release connections faster
+        config.setIdleTimeout(120000); // 2 minutes - shorter idle timeout
         
         // Connection leak detection
         config.setLeakDetectionThreshold(60000); // 60 seconds
@@ -97,12 +100,18 @@ public class DatabaseConfig {
         // Disable autocommit so Hibernate can manage transactions
         config.setAutoCommit(false);
         
+        // Connection pool name for debugging
+        config.setPoolName("SupabaseHikariCP");
+        
+        HikariDataSource dataSource = new HikariDataSource(config);
+        
         // Register shutdown hook to close connections properly
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("Shutting down database connection pool...");
+            dataSource.close();
         }));
         
-        return new HikariDataSource(config);
+        return dataSource;
     }
 }
 
