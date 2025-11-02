@@ -13,7 +13,9 @@ import reactor.core.publisher.Mono;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -391,6 +393,25 @@ public class AuthService {
             
             Map<String, Object> data = new HashMap<>();
             data.put("user", userData);
+            
+            // If user is a parent, fetch their children
+            if ("parent".equalsIgnoreCase(user.getRole())) {
+                System.out.println("🔍 Fetching children for parent: " + user.getId());
+                List<Student> children = studentRepository.findByAssociatedParentId(user.getId().toString());
+                System.out.println("✅ Found " + children.size() + " children");
+                
+                List<Map<String, Object>> childrenData = new ArrayList<>();
+                for (Student child : children) {
+                    Map<String, Object> childData = new HashMap<>();
+                    childData.put("studentId", child.getId().toString());
+                    childData.put("studentName", child.getName());
+                    childrenData.add(childData);
+                }
+                
+                data.put("children", childrenData);
+                System.out.println("✅ Added children data to response");
+            }
+            
             // Handle access token - Supabase may not return it if email confirmation is required
             String accessToken = (String) authResponse.get("access_token");
             String refreshToken = (String) authResponse.get("refresh_token");
