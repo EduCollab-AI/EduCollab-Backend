@@ -1,9 +1,11 @@
 package com.educollab.service;
 
 import com.educollab.model.Course;
+import com.educollab.model.Enrollment;
 import com.educollab.model.Schedule;
 import com.educollab.model.Student;
 import com.educollab.repository.CourseRepository;
+import com.educollab.repository.EnrollmentRepository;
 import com.educollab.repository.ScheduleRepository;
 import com.educollab.repository.StudentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +34,9 @@ public class CourseService {
     
     @Autowired
     private StudentRepository studentRepository;
+    
+    @Autowired
+    private EnrollmentRepository enrollmentRepository;
     
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> createCourse(Map<String, Object> request) {
@@ -147,9 +152,25 @@ public class CourseService {
             List<Schedule> savedSchedules = scheduleRepository.saveAll(schedules);
             
             System.out.println("✅ Saved " + savedSchedules.size() + " schedule entries");
+            
+            // Step 5: Create enrollment for student in this course
+            // Check if enrollment already exists
+            boolean enrollmentExists = enrollmentRepository.existsByCourseIdAndChildId(courseId, studentId);
+            
+            if (!enrollmentExists) {
+                Enrollment enrollment = new Enrollment(courseId, studentId);
+                enrollment.setEnrolledAt(LocalDateTime.now());
+                enrollment.setStatus("active");
+                Enrollment savedEnrollment = enrollmentRepository.save(enrollment);
+                System.out.println("✅ Created enrollment for student: " + studentId + " in course: " + courseId);
+                System.out.println("✅ Enrollment ID: " + savedEnrollment.getId());
+            } else {
+                System.out.println("ℹ️ Enrollment already exists for this student and course");
+            }
+            
             System.out.println("========================================");
             
-            // Step 5: Build response
+            // Step 6: Build response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "Course created successfully");
