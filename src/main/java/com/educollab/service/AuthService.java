@@ -515,7 +515,7 @@ public class AuthService {
                 if (birthdate != null) {
                     student.setBirthDate(birthdate);
                 }
-                student.setUpdatedAt(LocalDateTime.now());
+                // Note: updated_at column removed from database schema
             }
             
             Student savedStudent = studentRepository.save(student);
