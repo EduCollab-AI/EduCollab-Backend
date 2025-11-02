@@ -448,7 +448,12 @@ public class AuthService {
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> addChild(Map<String, Object> request) {
         try {
-            String name = (String) request.get("name");
+            // studentId is now required
+            String studentIdStr = (String) request.get("studentId");
+            if (studentIdStr == null || studentIdStr.isEmpty()) {
+                throw new RuntimeException("studentId is required");
+            }
+            
             String parentId = (String) request.get("parentId");
             Boolean isAssociated = (Boolean) request.getOrDefault("isAssociated", true);
             LocalDate birthdate = null;
@@ -463,21 +468,55 @@ public class AuthService {
             
             System.out.println("========================================");
             System.out.println("📝 Adding Child:");
-            System.out.println("Name: " + name);
+            System.out.println("Student ID: " + studentIdStr);
             System.out.println("Parent ID: " + parentId);
             System.out.println("Is Associated: " + isAssociated);
             System.out.println("Birthdate: " + birthdate);
             System.out.println("========================================");
             
-            // Create student record
-            Student student = new Student();
-            student.setId(UUID.randomUUID()); // Manual UUID generation as fallback
-            student.setName(name);
-            student.setAssociatedParentId(parentId);
-            student.setIsAssociated(isAssociated);
-            student.setBirthDate(birthdate);
-            student.setInstitutionId(null);
-            student.setCreatedAt(LocalDateTime.now());
+            // Parse student ID
+            UUID studentId;
+            try {
+                studentId = UUID.fromString(studentIdStr);
+            } catch (IllegalArgumentException e) {
+                throw new RuntimeException("Invalid studentId format: " + studentIdStr);
+            }
+            
+            // Fetch existing student or create new one
+            Student student = studentRepository.findById(studentId).orElse(null);
+            
+            if (student == null) {
+                // Create new student record
+                System.out.println("Creating new student with ID: " + studentId);
+                student = new Student();
+                student.setId(studentId);
+                student.setAssociatedParentId(parentId);
+                student.setIsAssociated(isAssociated);
+                student.setBirthDate(birthdate);
+                student.setInstitutionId(null);
+                student.setCreatedAt(LocalDateTime.now());
+                
+                // Name might be provided in request
+                String name = (String) request.get("name");
+                if (name != null && !name.isEmpty()) {
+                    student.setName(name);
+                } else {
+                    throw new RuntimeException("Name is required when creating a new student");
+                }
+            } else {
+                // Update existing student
+                System.out.println("Updating existing student: " + student.getName());
+                if (parentId != null) {
+                    student.setAssociatedParentId(parentId);
+                }
+                if (isAssociated != null) {
+                    student.setIsAssociated(isAssociated);
+                }
+                if (birthdate != null) {
+                    student.setBirthDate(birthdate);
+                }
+                student.setUpdatedAt(LocalDateTime.now());
+            }
             
             Student savedStudent = studentRepository.save(student);
             

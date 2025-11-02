@@ -2,8 +2,10 @@ package com.educollab.service;
 
 import com.educollab.model.Course;
 import com.educollab.model.Schedule;
+import com.educollab.model.Student;
 import com.educollab.repository.CourseRepository;
 import com.educollab.repository.ScheduleRepository;
+import com.educollab.repository.StudentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +30,9 @@ public class CourseService {
     @Autowired
     private ScheduleRepository scheduleRepository;
     
+    @Autowired
+    private StudentRepository studentRepository;
+    
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> createCourse(Map<String, Object> request) {
         try {
@@ -43,6 +48,13 @@ public class CourseService {
             Integer totalSessions = ((Number) request.get("totalSessions")).intValue();
             String courseStartDateStr = (String) request.get("courseStartDate");
             
+            // studentId is required when parent adds a course
+            String studentIdStr = (String) request.get("studentId");
+            if (studentIdStr == null || studentIdStr.isEmpty()) {
+                throw new RuntimeException("studentId is required");
+            }
+            UUID studentId = UUID.fromString(studentIdStr);
+            
             // Optional fields
             String description = request.get("description") != null ? (String) request.get("description") : null;
             Integer maxStudents = request.get("maxStudents") != null ? ((Number) request.get("maxStudents")).intValue() : null;
@@ -52,10 +64,16 @@ public class CourseService {
             System.out.println("Location: " + location);
             System.out.println("Total Sessions: " + totalSessions);
             System.out.println("Course Start Date: " + courseStartDateStr);
+            System.out.println("Student ID: " + studentIdStr);
             System.out.println("Description: " + description);
             
             // Parse course start date
             LocalDate courseStartDate = LocalDate.parse(courseStartDateStr);
+            
+            // Validate that student exists
+            Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentIdStr));
+            System.out.println("✅ Student validated: " + student.getName() + " (ID: " + studentId + ")");
             
             // Extract schedule array
             @SuppressWarnings("unchecked")
