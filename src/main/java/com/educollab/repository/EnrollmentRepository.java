@@ -9,7 +9,7 @@ import java.util.UUID;
 @Repository
 public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
     List<Enrollment> findByCourseId(UUID courseId);
-    List<Enrollment> findByChildId(UUID childId);
-    boolean existsByCourseIdAndChildId(UUID courseId, UUID childId);
+    List<Enrollment> findByStudentId(UUID studentId);
+    boolean existsByCourseIdAndStudentId(UUID courseId, UUID studentId);
 }
 

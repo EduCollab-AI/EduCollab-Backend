@@ -155,7 +155,7 @@ public class CourseService {
             
             // Step 5: Create enrollment for student in this course
             // Check if enrollment already exists
-            boolean enrollmentExists = enrollmentRepository.existsByCourseIdAndChildId(courseId, studentId);
+            boolean enrollmentExists = enrollmentRepository.existsByCourseIdAndStudentId(courseId, studentId);
             
             if (!enrollmentExists) {
                 Enrollment enrollment = new Enrollment(courseId, studentId);

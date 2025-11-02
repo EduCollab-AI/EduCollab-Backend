@@ -16,8 +16,8 @@ public class Enrollment {
     @Column(name = "course_id", nullable = false)
     private UUID courseId;
     
-    @Column(name = "child_id", nullable = false)
-    private UUID childId; // This will map to our students.id
+    @Column(name = "student_id", nullable = false)
+    private UUID studentId;
     
     @Column(name = "enrolled_at")
     private LocalDateTime enrolledAt;
@@ -28,9 +28,9 @@ public class Enrollment {
     // Constructors
     public Enrollment() {}
     
-    public Enrollment(UUID courseId, UUID childId) {
+    public Enrollment(UUID courseId, UUID studentId) {
         this.courseId = courseId;
-        this.childId = childId;
+        this.studentId = studentId;
         this.status = "active";
     }
     
@@ -51,12 +51,12 @@ public class Enrollment {
         this.courseId = courseId;
     }
     
-    public UUID getChildId() {
-        return childId;
+    public UUID getStudentId() {
+        return studentId;
     }
     
-    public void setChildId(UUID childId) {
-        this.childId = childId;
+    public void setStudentId(UUID studentId) {
+        this.studentId = studentId;
     }
     
     public LocalDateTime getEnrolledAt() {

@@ -82,10 +82,10 @@ ORDER BY ordinal_position;
 CREATE TABLE IF NOT EXISTS public.course_enrollments (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   course_id UUID REFERENCES public.courses(id) ON DELETE CASCADE,
-  child_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+  student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
   enrolled_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'dropped', 'suspended')),
-  UNIQUE(course_id, child_id)
+  UNIQUE(course_id, student_id)
 );
 
 SELECT 'course_enrollments' as table_name, column_name, data_type, is_nullable 
