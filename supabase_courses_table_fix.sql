@@ -78,3 +78,19 @@ WHERE table_schema = 'public'
 AND table_name = 'schedules'
 ORDER BY ordinal_position;
 
+-- Create course_enrollments table if it doesn't exist
+CREATE TABLE IF NOT EXISTS public.course_enrollments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  course_id UUID REFERENCES public.courses(id) ON DELETE CASCADE,
+  child_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+  enrolled_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'dropped', 'suspended')),
+  UNIQUE(course_id, child_id)
+);
+
+SELECT 'course_enrollments' as table_name, column_name, data_type, is_nullable 
+FROM information_schema.columns 
+WHERE table_schema = 'public' 
+AND table_name = 'course_enrollments'
+ORDER BY ordinal_position;
+
