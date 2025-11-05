@@ -91,6 +91,15 @@ public class ClassScheduleService {
             
             System.out.println("✅ Found " + allSchedules.size() + " schedule(s)");
             
+            // Count schedules per course (to divide totalSessions among schedules)
+            Map<UUID, Integer> schedulesPerCourse = new HashMap<>();
+            for (Schedule schedule : allSchedules) {
+                UUID courseId = schedule.getCourseId();
+                schedulesPerCourse.put(courseId, schedulesPerCourse.getOrDefault(courseId, 0) + 1);
+            }
+            
+            System.out.println("📊 Schedules per course: " + schedulesPerCourse);
+            
             // Step 5: Pre-calculate events for each schedule
             List<Map<String, Object>> events = new ArrayList<>();
             
@@ -100,9 +109,12 @@ public class ClassScheduleService {
                     continue;
                 }
                 
+                int numberOfSchedulesForCourse = schedulesPerCourse.getOrDefault(schedule.getCourseId(), 1);
+                
                 List<Map<String, Object>> scheduleEvents = calculateScheduleEvents(
                     schedule, 
                     course,
+                    numberOfSchedulesForCourse,
                     startDate, 
                     endDate, 
                     maximumCount
@@ -150,6 +162,7 @@ public class ClassScheduleService {
      */
     private List<Map<String, Object>> calculateScheduleEvents(Schedule schedule,
                                                                 Course course,
+                                                                int numberOfSchedulesForCourse,
                                                                 LocalDate startDate,
                                                                 LocalDate endDate,
                                                                 Integer maximumCount) {
@@ -165,10 +178,14 @@ public class ClassScheduleService {
         // Use effective start date (max of schedule start and requested start)
         LocalDate effectiveStartDate = scheduleStartDate.isAfter(startDate) ? scheduleStartDate : startDate;
         
-        // Calculate remaining sessions based on totalSessions and sessions already occurred
+        // Calculate sessions per schedule: divide totalSessions by number of schedules for this course
+        // Use integer division - if there's a remainder, it's acceptable (each schedule gets floor division)
         Integer totalSessions = course.getTotalSessions();
+        int sessionsPerSchedule = totalSessions / numberOfSchedulesForCourse;
+        
+        // Calculate remaining sessions for THIS schedule based on sessionsPerSchedule
         int sessionsAlreadyOccurred = countSessionsOccurred(schedule, scheduleStartDate, effectiveStartDate);
-        int countOfCoursesLeft = Math.max(0, totalSessions - sessionsAlreadyOccurred);
+        int countOfCoursesLeft = Math.max(0, sessionsPerSchedule - sessionsAlreadyOccurred);
         
         // Calculate effective maximum count: min(maximumCount, remainingSessions)
         Integer effectiveMaxCount = maximumCount;
@@ -179,8 +196,10 @@ public class ClassScheduleService {
         }
         
         System.out.println("📊 Course: " + course.getName() + ", Total Sessions: " + totalSessions + 
-                          ", Already Occurred: " + sessionsAlreadyOccurred + 
-                          ", Remaining: " + countOfCoursesLeft + 
+                          ", Number of Schedules: " + numberOfSchedulesForCourse +
+                          ", Sessions per Schedule: " + sessionsPerSchedule +
+                          ", Already Occurred (this schedule): " + sessionsAlreadyOccurred + 
+                          ", Remaining (this schedule): " + countOfCoursesLeft + 
                           ", Effective Max Count: " + effectiveMaxCount);
         
         // Parse recurrence rule or use dayOfWeek
