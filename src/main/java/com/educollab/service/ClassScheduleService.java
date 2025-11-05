@@ -102,6 +102,7 @@ public class ClassScheduleService {
                 
                 List<Map<String, Object>> scheduleEvents = calculateScheduleEvents(
                     schedule, 
+                    course,
                     startDate, 
                     endDate, 
                     maximumCount
@@ -148,6 +149,7 @@ public class ClassScheduleService {
      * Calculate schedule events based on recurrence rules
      */
     private List<Map<String, Object>> calculateScheduleEvents(Schedule schedule,
+                                                                Course course,
                                                                 LocalDate startDate,
                                                                 LocalDate endDate,
                                                                 Integer maximumCount) {
@@ -163,26 +165,181 @@ public class ClassScheduleService {
         // Use effective start date (max of schedule start and requested start)
         LocalDate effectiveStartDate = scheduleStartDate.isAfter(startDate) ? scheduleStartDate : startDate;
         
+        // Calculate remaining sessions based on totalSessions and sessions already occurred
+        Integer totalSessions = course.getTotalSessions();
+        int sessionsAlreadyOccurred = countSessionsOccurred(schedule, scheduleStartDate, effectiveStartDate);
+        int countOfCoursesLeft = Math.max(0, totalSessions - sessionsAlreadyOccurred);
+        
+        // Calculate effective maximum count: min(maximumCount, remainingSessions)
+        Integer effectiveMaxCount = maximumCount;
+        if (effectiveMaxCount != null) {
+            effectiveMaxCount = Math.min(maximumCount, countOfCoursesLeft);
+        } else {
+            effectiveMaxCount = countOfCoursesLeft;
+        }
+        
+        System.out.println("📊 Course: " + course.getName() + ", Total Sessions: " + totalSessions + 
+                          ", Already Occurred: " + sessionsAlreadyOccurred + 
+                          ", Remaining: " + countOfCoursesLeft + 
+                          ", Effective Max Count: " + effectiveMaxCount);
+        
         // Parse recurrence rule or use dayOfWeek
         if (recurrenceRule != null && !recurrenceRule.isEmpty()) {
             // Try to parse RRULE format
             if (recurrenceRule.toUpperCase().startsWith("FREQ=")) {
                 events.addAll(parseRRULE(recurrenceRule, scheduleStartDate, startTime, durationMinutes, 
-                                       courseId, effectiveStartDate, endDate, maximumCount));
+                                       courseId, effectiveStartDate, endDate, effectiveMaxCount));
             } else {
                 // Fall back to simple recurrence patterns
                 events.addAll(parseSimpleRecurrence(recurrenceRule, scheduleStartDate, startTime, 
                                                    durationMinutes, courseId, effectiveStartDate, 
-                                                   endDate, maximumCount, dayOfWeekStr));
+                                                   endDate, effectiveMaxCount, dayOfWeekStr));
             }
         } else {
             // Use dayOfWeek for weekly recurrence
             events.addAll(calculateWeeklyEvents(dayOfWeekStr, scheduleStartDate, startTime, 
                                               durationMinutes, courseId, effectiveStartDate, 
-                                              endDate, maximumCount));
+                                              endDate, effectiveMaxCount));
         }
         
         return events;
+    }
+    
+    /**
+     * Count how many sessions have already occurred from scheduleStartDate to currentDate
+     */
+    private int countSessionsOccurred(Schedule schedule, LocalDate scheduleStartDate, LocalDate currentDate) {
+        if (currentDate.isBefore(scheduleStartDate) || currentDate.equals(scheduleStartDate)) {
+            return 0; // No sessions have occurred yet
+        }
+        
+        String recurrenceRule = schedule.getRecurrenceRule();
+        String dayOfWeekStr = schedule.getDayOfWeek();
+        
+        // Count based on recurrence pattern
+        if (recurrenceRule != null && !recurrenceRule.isEmpty()) {
+            if (recurrenceRule.toUpperCase().startsWith("FREQ=")) {
+                return countSessionsOccurredRRULE(recurrenceRule, scheduleStartDate, currentDate, dayOfWeekStr);
+            } else {
+                return countSessionsOccurredSimple(recurrenceRule, scheduleStartDate, currentDate, dayOfWeekStr);
+            }
+        } else {
+            // Default to weekly
+            return countSessionsOccurredWeekly(dayOfWeekStr, scheduleStartDate, currentDate);
+        }
+    }
+    
+    /**
+     * Count sessions for RRULE format
+     */
+    private int countSessionsOccurredRRULE(String rrule, LocalDate scheduleStartDate, LocalDate currentDate, String dayOfWeekStr) {
+        String[] parts = rrule.toUpperCase().split(";");
+        String freq = null;
+        Integer byMonthDay = null;
+        String byDay = null;
+        
+        for (String part : parts) {
+            if (part.startsWith("FREQ=")) {
+                freq = part.substring(5);
+            } else if (part.startsWith("BYMONTHDAY=")) {
+                byMonthDay = Integer.parseInt(part.substring(11));
+            } else if (part.startsWith("BYDAY=")) {
+                byDay = part.substring(6);
+            }
+        }
+        
+        if (freq == null) {
+            freq = "WEEKLY";
+        }
+        
+        switch (freq) {
+            case "DAILY":
+                return (int) java.time.temporal.ChronoUnit.DAYS.between(scheduleStartDate, currentDate);
+            case "WEEKLY":
+                DayOfWeek targetDay = parseDayOfWeekString(byDay);
+                if (targetDay == null) {
+                    targetDay = parseDayOfWeek(dayOfWeekStr);
+                    if (targetDay == null) {
+                        targetDay = scheduleStartDate.getDayOfWeek();
+                    }
+                }
+                // Count sessions that occurred strictly before currentDate
+                int weeks = 0;
+                LocalDate weeklyDate = scheduleStartDate;
+                while (weeklyDate.isBefore(currentDate)) {
+                    if (weeklyDate.getDayOfWeek() == targetDay) {
+                        weeks++;
+                    }
+                    weeklyDate = weeklyDate.plusDays(1);
+                }
+                return weeks;
+            case "MONTHLY":
+                if (byMonthDay != null) {
+                    // Count sessions that occurred strictly before currentDate
+                    int months = 0;
+                    LocalDate monthlyDate = scheduleStartDate;
+                    while (monthlyDate.isBefore(currentDate)) {
+                        months++;
+                        monthlyDate = monthlyDate.plusMonths(1);
+                        // Adjust if month doesn't have enough days
+                        if (monthlyDate.lengthOfMonth() < byMonthDay) {
+                            monthlyDate = LocalDate.of(monthlyDate.getYear(), monthlyDate.getMonth(), 
+                                                      monthlyDate.lengthOfMonth());
+                        } else {
+                            monthlyDate = LocalDate.of(monthlyDate.getYear(), monthlyDate.getMonth(), byMonthDay);
+                        }
+                    }
+                    return months;
+                } else {
+                    // Monthly on same day of week - count sessions that occurred strictly before currentDate
+                    int months = 0;
+                    LocalDate monthlyDate2 = scheduleStartDate;
+                    while (monthlyDate2.isBefore(currentDate)) {
+                        months++;
+                        monthlyDate2 = monthlyDate2.plusMonths(1);
+                    }
+                    return months;
+                }
+            default:
+                return countSessionsOccurredWeekly(dayOfWeekStr, scheduleStartDate, currentDate);
+        }
+    }
+    
+    /**
+     * Count sessions for simple recurrence patterns
+     */
+    private int countSessionsOccurredSimple(String recurrence, LocalDate scheduleStartDate, LocalDate currentDate, String dayOfWeekStr) {
+        switch (recurrence.toLowerCase()) {
+            case "daily":
+                return (int) java.time.temporal.ChronoUnit.DAYS.between(scheduleStartDate, currentDate);
+            case "weekly":
+                return countSessionsOccurredWeekly(dayOfWeekStr, scheduleStartDate, currentDate);
+            case "monthly":
+                return (int) java.time.temporal.ChronoUnit.MONTHS.between(scheduleStartDate, currentDate);
+            default:
+                return countSessionsOccurredWeekly(dayOfWeekStr, scheduleStartDate, currentDate);
+        }
+    }
+    
+    /**
+     * Count sessions for weekly recurrence
+     */
+    private int countSessionsOccurredWeekly(String dayOfWeekStr, LocalDate scheduleStartDate, LocalDate currentDate) {
+        DayOfWeek targetDay = parseDayOfWeek(dayOfWeekStr);
+        if (targetDay == null) {
+            targetDay = scheduleStartDate.getDayOfWeek();
+        }
+        
+        int count = 0;
+        LocalDate date = scheduleStartDate;
+        while (!date.isAfter(currentDate)) {
+            if (date.getDayOfWeek() == targetDay && date.isBefore(currentDate)) {
+                count++;
+            }
+            date = date.plusDays(1);
+            if (date.isAfter(currentDate)) break;
+        }
+        return count;
     }
     
     /**
