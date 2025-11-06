@@ -36,7 +36,7 @@ public class PaymentEvent {
     @Column(name = "status", nullable = false)
     private String status; // 'pending', 'paid', 'overdue', 'cancelled'
     
-    @Column(name = "note")
+    @Column(name = "notes")
     private String note;
     
     @Column(name = "created_at")
