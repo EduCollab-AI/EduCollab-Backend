@@ -382,5 +382,72 @@ public class PaymentQueryService {
         
         return result;
     }
+    
+    @Transactional
+    public Map<String, Object> updatePaymentEventStatus(String paymentEventIdStr, String status) {
+        try {
+            System.out.println("========================================");
+            System.out.println("💰 Updating payment event status:");
+            System.out.println("Payment Event ID: " + paymentEventIdStr);
+            System.out.println("New Status: " + status);
+            System.out.println("========================================");
+            
+            UUID paymentEventId = UUID.fromString(paymentEventIdStr);
+            
+            // Find the payment event
+            PaymentEvent paymentEvent = paymentEventRepository.findById(paymentEventId)
+                .orElseThrow(() -> new RuntimeException("Payment event not found with ID: " + paymentEventIdStr));
+            
+            System.out.println("✅ Found payment event: " + paymentEvent.getId() + ", Current status: " + paymentEvent.getStatus());
+            
+            // Validate status transition
+            if (!"pending".equalsIgnoreCase(paymentEvent.getStatus())) {
+                throw new RuntimeException("Payment event status must be 'pending' to update to 'paid'. Current status: " + paymentEvent.getStatus());
+            }
+            
+            if (!"paid".equalsIgnoreCase(status)) {
+                throw new RuntimeException("Invalid status. Only 'paid' status is allowed. Provided: " + status);
+            }
+            
+            // Update status to paid
+            paymentEvent.setStatus("paid");
+            paymentEvent.setPaidDate(LocalDate.now());
+            paymentEvent.setUpdatedAt(LocalDateTime.now());
+            
+            // Save the updated event
+            PaymentEvent updatedEvent = paymentEventRepository.save(paymentEvent);
+            
+            System.out.println("✅ Payment event updated successfully");
+            System.out.println("========================================");
+            
+            // Format and return the updated event
+            return formatSinglePaymentEvent(updatedEvent);
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error updating payment event status: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to update payment event status: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Format a single payment event for response
+     */
+    private Map<String, Object> formatSinglePaymentEvent(PaymentEvent event) {
+        Map<String, Object> eventData = new HashMap<>();
+        eventData.put("paymentEventId", event.getId().toString());
+        eventData.put("item", event.getItem());
+        eventData.put("amount", event.getAmount());
+        
+        // Map status: 'paid' -> 'PAID', others -> 'UNPAID'
+        String status = "paid".equalsIgnoreCase(event.getStatus()) ? "PAID" : "UNPAID";
+        eventData.put("status", status);
+        
+        eventData.put("dueDate", event.getDueDate().toString());
+        eventData.put("paidDate", event.getPaidDate() != null ? event.getPaidDate().toString() : null);
+        eventData.put("note", event.getNote());
+        
+        return eventData;
+    }
 }
 

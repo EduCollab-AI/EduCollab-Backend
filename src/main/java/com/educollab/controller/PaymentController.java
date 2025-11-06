@@ -50,4 +50,24 @@ public class PaymentController {
         
         return ResponseEntity.ok(result);
     }
+    
+    @PutMapping("/{paymentEventId}/status")
+    public ResponseEntity<Map<String, Object>> updatePaymentEventStatus(
+            @PathVariable String paymentEventId,
+            @RequestBody Map<String, Object> request) {
+        
+        System.out.println("Update payment event status endpoint accessed");
+        System.out.println("Payment Event ID: " + paymentEventId);
+        System.out.println("Request body: " + request);
+        
+        String status = request.get("status") != null ? request.get("status").toString() : null;
+        
+        if (status == null || status.isEmpty()) {
+            throw new RuntimeException("status is required in request body");
+        }
+        
+        Map<String, Object> result = paymentQueryService.updatePaymentEventStatus(paymentEventId, status);
+        
+        return ResponseEntity.ok(result);
+    }
 }
