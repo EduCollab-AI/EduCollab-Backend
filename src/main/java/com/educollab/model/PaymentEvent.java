@@ -18,8 +18,8 @@ public class PaymentEvent {
     @Column(name = "student_id", nullable = false)
     private UUID studentId;
     
-    @Transient
-    private UUID paymentScheduleId; // Not persisted in database, used for tracking during generation
+    @Column(name = "payment_schedule_id")
+    private UUID paymentScheduleId;
     
     @Column(name = "item")
     private String item;

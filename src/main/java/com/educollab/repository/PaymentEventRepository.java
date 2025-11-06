@@ -24,12 +24,10 @@ public interface PaymentEventRepository extends JpaRepository<PaymentEvent, UUID
         @Param("endDate") LocalDate endDate
     );
     
-    @Query("SELECT COUNT(pe) > 0 FROM PaymentEvent pe WHERE pe.studentId = :studentId AND pe.item = :item AND pe.amount = :amount AND pe.dueDate = :dueDate")
-    boolean existsByStudentIdAndItemAndAmountAndDueDate(
-        @Param("studentId") UUID studentId,
-        @Param("item") String item,
-        @Param("amount") java.math.BigDecimal amount,
-        @Param("dueDate") LocalDate dueDate
+    boolean existsByStudentIdAndPaymentScheduleIdAndDueDate(
+        UUID studentId,
+        UUID paymentScheduleId,
+        LocalDate dueDate
     );
     
     List<PaymentEvent> findByStudentIdOrderByDueDateDesc(UUID studentId);
