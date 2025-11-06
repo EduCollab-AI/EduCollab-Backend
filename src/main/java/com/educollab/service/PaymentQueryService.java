@@ -136,7 +136,8 @@ public class PaymentQueryService {
         // Get existing events to avoid duplicates
         List<PaymentEvent> existingEvents = paymentEventRepository.findByStudentIdOrderByDueDateDesc(studentId);
         for (PaymentEvent existing : existingEvents) {
-            String key = existing.getPaymentScheduleId() + "_" + existing.getDueDate();
+            // Use item, amount, and dueDate as unique key (since payment_schedule_id is not persisted)
+            String key = existing.getItem() + "_" + existing.getAmount() + "_" + existing.getDueDate();
             existingEventKeys.add(key);
         }
         
@@ -168,15 +169,15 @@ public class PaymentQueryService {
                     continue;
                 }
                 
-                // Check if this event already exists (using both cache and repository)
-                String eventKey = schedule.getId() + "_" + dueDate;
+                // Check if this event already exists (using item, amount, and dueDate as unique key)
+                String eventKey = schedule.getItem() + "_" + schedule.getAmount() + "_" + dueDate;
                 if (existingEventKeys.contains(eventKey)) {
                     continue;
                 }
                 
                 // Double-check using repository method
-                if (paymentEventRepository.existsByStudentIdAndPaymentScheduleIdAndDueDate(
-                    studentId, schedule.getId(), dueDate)) {
+                if (paymentEventRepository.existsByStudentIdAndItemAndAmountAndDueDate(
+                    studentId, schedule.getItem(), schedule.getAmount(), dueDate)) {
                     existingEventKeys.add(eventKey);
                     continue;
                 }
