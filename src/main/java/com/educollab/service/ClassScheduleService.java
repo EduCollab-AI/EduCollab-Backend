@@ -267,17 +267,17 @@ public class ClassScheduleService {
             // Try to parse RRULE format
             if (recurrenceRule.toUpperCase().startsWith("FREQ=")) {
                 events.addAll(parseRRULE(recurrenceRule, scheduleStartDate, startTime, durationMinutes, 
-                                       courseId, effectiveStartDate, endDate, effectiveMaxCount, inactiveDate, exceptionMap));
+                                       courseId, effectiveStartDate, endDate, effectiveMaxCount, inactiveDate, exceptionMap, schedule.getId()));
             } else {
                 // Fall back to simple recurrence patterns
                 events.addAll(parseSimpleRecurrence(recurrenceRule, scheduleStartDate, startTime, 
                                                    durationMinutes, courseId, effectiveStartDate, 
-                                                   endDate, effectiveMaxCount, dayOfWeekStr, inactiveDate, exceptionMap));
+                                                   endDate, effectiveMaxCount, dayOfWeekStr, inactiveDate, exceptionMap, schedule.getId()));
             }
         } else {
             // Use dayOfWeek for weekly recurrence
             events.addAll(calculateWeeklyEvents(dayOfWeekStr, scheduleStartDate, startTime, 
-                                              durationMinutes, courseId, effectiveStartDate, 
+                                              durationMinutes, courseId, schedule.getId(), effectiveStartDate, 
                                               endDate, effectiveMaxCount, inactiveDate, exceptionMap));
         }
         
@@ -433,7 +433,8 @@ public class ClassScheduleService {
                                                    LocalDate endDate,
                                                    Integer maximumCount,
                                                    LocalDate inactiveDate,
-                                                   Map<String, ScheduleException> exceptionMap) {
+                                                   Map<String, ScheduleException> exceptionMap,
+                                                   UUID scheduleId) {
         List<Map<String, Object>> events = new ArrayList<>();
         
         // Parse RRULE components
@@ -465,9 +466,9 @@ public class ClassScheduleService {
                     if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                         break;
                     }
-                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, scheduleId, currentDate, startTime, durationMinutes, exceptionMap);
                     if (overrideEvent == null) {
-                        events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
+                        events.add(createEvent(scheduleId, courseId, currentDate, startTime, durationMinutes));
                     } else if (!overrideEvent.isEmpty()) {
                         events.add(overrideEvent);
                     }
@@ -492,9 +493,9 @@ public class ClassScheduleService {
                     if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                         break;
                     }
-                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, scheduleId, currentDate, startTime, durationMinutes, exceptionMap);
                     if (overrideEvent == null) {
-                        events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
+                        events.add(createEvent(scheduleId, courseId, currentDate, startTime, durationMinutes));
                     } else if (!overrideEvent.isEmpty()) {
                         events.add(overrideEvent);
                     }
@@ -519,9 +520,9 @@ public class ClassScheduleService {
                         if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                             break;
                         }
-                        Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+                        Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, scheduleId, currentDate, startTime, durationMinutes, exceptionMap);
                         if (overrideEvent == null) {
-                            events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
+                            events.add(createEvent(scheduleId, courseId, currentDate, startTime, durationMinutes));
                         } else if (!overrideEvent.isEmpty()) {
                             events.add(overrideEvent);
                         }
@@ -558,9 +559,9 @@ public class ClassScheduleService {
                         if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                             break;
                         }
-                        Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+                        Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, scheduleId, currentDate, startTime, durationMinutes, exceptionMap);
                         if (overrideEvent == null) {
-                            events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
+                            events.add(createEvent(scheduleId, courseId, currentDate, startTime, durationMinutes));
                         } else if (!overrideEvent.isEmpty()) {
                             events.add(overrideEvent);
                         }
@@ -579,7 +580,7 @@ public class ClassScheduleService {
                 // Default to weekly
                 events.addAll(calculateWeeklyEvents(scheduleStartDate.getDayOfWeek().toString(), 
                                                    scheduleStartDate, startTime, durationMinutes, 
-                                                   courseId, startDate, endDate, maximumCount, inactiveDate, exceptionMap));
+                                                   courseId, scheduleId, startDate, endDate, maximumCount, inactiveDate, exceptionMap));
         }
         
         return events;
@@ -598,13 +599,14 @@ public class ClassScheduleService {
                                                               Integer maximumCount,
                                                               String dayOfWeekStr,
                                                               LocalDate inactiveDate,
-                                                              Map<String, ScheduleException> exceptionMap) {
+                                                              Map<String, ScheduleException> exceptionMap,
+                                                              UUID scheduleId) {
         List<Map<String, Object>> events = new ArrayList<>();
         
         switch (recurrence.toLowerCase()) {
             case "weekly":
                 events.addAll(calculateWeeklyEvents(dayOfWeekStr, scheduleStartDate, startTime, 
-                                                  durationMinutes, courseId, startDate, endDate, maximumCount, inactiveDate, exceptionMap));
+                                                  durationMinutes, courseId, scheduleId, startDate, endDate, maximumCount, inactiveDate, exceptionMap));
                 break;
             case "monthly":
                 // Monthly on the same day
@@ -619,9 +621,9 @@ public class ClassScheduleService {
                     if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                         break;
                     }
-                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, scheduleId, currentDate, startTime, durationMinutes, exceptionMap);
                     if (overrideEvent == null) {
-                        events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
+                        events.add(createEvent(scheduleId, courseId, currentDate, startTime, durationMinutes));
                     } else if (!overrideEvent.isEmpty()) {
                         events.add(overrideEvent);
                     }
@@ -640,9 +642,9 @@ public class ClassScheduleService {
                     if (inactiveDate != null && dailyDate.isAfter(inactiveDate)) {
                         break;
                     }
-                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, dailyDate, startTime, durationMinutes, exceptionMap);
+                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, scheduleId, dailyDate, startTime, durationMinutes, exceptionMap);
                     if (overrideEvent == null) {
-                        events.add(createEvent(courseId, dailyDate, startTime, durationMinutes));
+                        events.add(createEvent(scheduleId, courseId, dailyDate, startTime, durationMinutes));
                     } else if (!overrideEvent.isEmpty()) {
                         events.add(overrideEvent);
                     }
@@ -653,7 +655,7 @@ public class ClassScheduleService {
             default:
                 // Default to weekly
                 events.addAll(calculateWeeklyEvents(dayOfWeekStr, scheduleStartDate, startTime, 
-                                                  durationMinutes, courseId, startDate, endDate, maximumCount, inactiveDate, exceptionMap));
+                                                  durationMinutes, courseId, scheduleId, startDate, endDate, maximumCount, inactiveDate, exceptionMap));
         }
         
         return events;
@@ -667,6 +669,7 @@ public class ClassScheduleService {
                                                               LocalTime startTime,
                                                               Long durationMinutes,
                                                               UUID courseId,
+                                                              UUID scheduleId,
                                                               LocalDate startDate,
                                                               LocalDate endDate,
                                                               Integer maximumCount,
@@ -698,9 +701,9 @@ public class ClassScheduleService {
             if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                 break;
             }
-            Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+            Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, scheduleId, currentDate, startTime, durationMinutes, exceptionMap);
             if (overrideEvent == null) {
-                events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
+                events.add(createEvent(scheduleId, courseId, currentDate, startTime, durationMinutes));
             } else if (!overrideEvent.isEmpty()) {
                 events.add(overrideEvent);
             }
@@ -714,11 +717,12 @@ public class ClassScheduleService {
     /**
      * Create an event map
      */
-    private Map<String, Object> createEvent(UUID courseId, LocalDate date, LocalTime startTime, Long durationMinutes) {
+    private Map<String, Object> createEvent(UUID scheduleId, UUID courseId, LocalDate date, LocalTime startTime, Long durationMinutes) {
         LocalDateTime startDateTime = LocalDateTime.of(date, startTime);
         LocalDateTime endDateTime = startDateTime.plusMinutes(durationMinutes);
         
         Map<String, Object> event = new HashMap<>();
+        event.put("scheduleId", scheduleId.toString());
         event.put("courseId", courseId.toString());
         event.put("startTime", startDateTime.atOffset(ZoneOffset.UTC).toString());
         event.put("endTime", endDateTime.atOffset(ZoneOffset.UTC).toString());
@@ -812,6 +816,7 @@ public class ClassScheduleService {
     }
 
     private Map<String, Object> applyExceptionIfPresent(UUID courseId,
+                                                         UUID scheduleId,
                                                          LocalDate originalDate,
                                                          LocalTime originalStartTime,
                                                          Long durationMinutes,
@@ -830,7 +835,7 @@ public class ClassScheduleService {
         LocalTime eventStart = exception.getNewStartTime() != null ? exception.getNewStartTime() : originalStartTime;
         Long eventDuration = exception.getNewDurationMinutes() != null ? exception.getNewDurationMinutes() : durationMinutes;
         
-        return createEvent(courseId, eventDate, eventStart, eventDuration);
+        return createEvent(scheduleId, courseId, eventDate, eventStart, eventDuration);
     }
     
     private String buildExceptionKey(LocalDate date, LocalTime time) {
