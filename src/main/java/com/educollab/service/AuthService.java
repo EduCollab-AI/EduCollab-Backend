@@ -448,17 +448,11 @@ public class AuthService {
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> addChild(Map<String, Object> request) {
         try {
-            // studentId is now required
             String studentIdStr = (String) request.get("studentId");
-            if (studentIdStr == null || studentIdStr.isEmpty()) {
-                throw new RuntimeException("studentId is required");
-            }
-            
             String parentId = (String) request.get("parentId");
             Boolean isAssociated = (Boolean) request.getOrDefault("isAssociated", true);
             LocalDate birthdate = null;
             
-            // Parse birthdate if provided
             if (request.get("birthdate") != null) {
                 String birthdateStr = (String) request.get("birthdate");
                 if (birthdateStr != null && !birthdateStr.isEmpty()) {
@@ -474,55 +468,47 @@ public class AuthService {
             System.out.println("Birthdate: " + birthdate);
             System.out.println("========================================");
             
-            // Parse student ID
-            UUID studentId;
-            try {
-                studentId = UUID.fromString(studentIdStr);
-            } catch (IllegalArgumentException e) {
-                throw new RuntimeException("Invalid studentId format: " + studentIdStr);
+            UUID studentId = null;
+            if (studentIdStr != null && !studentIdStr.isEmpty()) {
+                try {
+                    studentId = UUID.fromString(studentIdStr);
+                } catch (IllegalArgumentException e) {
+                    throw new RuntimeException("Invalid studentId format: " + studentIdStr);
+                }
             }
             
-            // Fetch existing student or create new one
-            Student student = studentRepository.findById(studentId).orElse(null);
+            Student student = null;
+            if (studentId != null) {
+                student = studentRepository.findById(studentId).orElse(null);
+            }
             
             if (student == null) {
-                // Create new student record
-                System.out.println("Creating new student with ID: " + studentId);
+                System.out.println("Creating new student record" + (studentId != null ? " with provided ID: " + studentId : " with auto-generated ID"));
                 student = new Student();
-                student.setId(studentId);
-                student.setAssociatedParentId(parentId);
-                student.setIsAssociated(isAssociated);
-                student.setBirthDate(birthdate);
-                student.setInstitutionId(null);
+                if (studentId != null) {
+                    student.setId(studentId);
+                }
                 student.setCreatedAt(LocalDateTime.now());
-                
-                // Name might be provided in request
-                String name = (String) request.get("name");
-                if (name != null && !name.isEmpty()) {
-                    student.setName(name);
-                } else {
-                    throw new RuntimeException("Name is required when creating a new student");
-                }
             } else {
-                // Update existing student
-                System.out.println("Updating existing student: " + student.getName());
-                if (parentId != null) {
-                    student.setAssociatedParentId(parentId);
-                }
-                if (isAssociated != null) {
-                    student.setIsAssociated(isAssociated);
-                }
-                if (birthdate != null) {
-                    student.setBirthDate(birthdate);
-                }
-                // Note: updated_at column removed from database schema
+                System.out.println("Updating existing student: " + student.getName() + " (ID: " + student.getId() + ")");
+            }
+            
+            String name = (String) request.get("name");
+            if (name != null && !name.isEmpty()) {
+                student.setName(name);
+            } else if (student.getName() == null || student.getName().isEmpty()) {
+                throw new RuntimeException("Name is required when creating a new student");
+            }
+            
+            student.setAssociatedParentId(parentId);
+            student.setIsAssociated(isAssociated);
+            if (birthdate != null) {
+                student.setBirthDate(birthdate);
             }
             
             Student savedStudent = studentRepository.save(student);
-            
             System.out.println("✅ Child saved successfully with ID: " + savedStudent.getId());
             
-            // Build response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "Child added successfully");
