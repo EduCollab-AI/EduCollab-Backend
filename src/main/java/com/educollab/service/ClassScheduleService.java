@@ -3,9 +3,11 @@ package com.educollab.service;
 import com.educollab.model.Course;
 import com.educollab.model.Enrollment;
 import com.educollab.model.Schedule;
+import com.educollab.model.ScheduleException;
 import com.educollab.model.Student;
 import com.educollab.repository.CourseRepository;
 import com.educollab.repository.EnrollmentRepository;
+import com.educollab.repository.ScheduleExceptionRepository;
 import com.educollab.repository.ScheduleRepository;
 import com.educollab.repository.StudentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +32,9 @@ public class ClassScheduleService {
     
     @Autowired
     private ScheduleRepository scheduleRepository;
+    
+    @Autowired
+    private ScheduleExceptionRepository scheduleExceptionRepository;
     
     @Autowired
     private StudentRepository studentRepository;
@@ -74,15 +79,19 @@ public class ClassScheduleService {
                 UUID courseId = enrollment.getCourseId();
                 courseIds.add(courseId);
                 String status = enrollment.getStatus() != null ? enrollment.getStatus() : "active";
-                courseStatusMap.put(courseId, status);
                 
-                if ("inactive".equalsIgnoreCase(status)) {
-                    LocalDate inactiveDate = enrollment.getDeactivatedAt() != null
+                if ("active".equalsIgnoreCase(status)) {
+                    courseStatusMap.put(courseId, "active");
+                    courseInactiveDateMap.remove(courseId);
+                } else {
+                    courseStatusMap.putIfAbsent(courseId, status);
+                    LocalDate deactivatedDate = enrollment.getDeactivatedAt() != null
                         ? enrollment.getDeactivatedAt().toLocalDate()
                         : LocalDate.now();
-                    courseInactiveDateMap.put(courseId, inactiveDate);
-                } else {
-                    courseInactiveDateMap.put(courseId, null);
+                    LocalDate currentInactive = courseInactiveDateMap.get(courseId);
+                    if (currentInactive == null || deactivatedDate.isBefore(currentInactive)) {
+                        courseInactiveDateMap.put(courseId, deactivatedDate);
+                    }
                 }
             }
             
@@ -104,6 +113,21 @@ public class ClassScheduleService {
             
             System.out.println("✅ Found " + allSchedules.size() + " schedule(s)");
             
+            // Fetch all schedule exceptions relevant to these schedules
+            Set<UUID> scheduleIds = new HashSet<>();
+            for (Schedule schedule : allSchedules) {
+                scheduleIds.add(schedule.getId());
+            }
+            Map<UUID, List<ScheduleException>> exceptionsBySchedule = new HashMap<>();
+            if (!scheduleIds.isEmpty()) {
+                List<ScheduleException> exceptions = scheduleExceptionRepository.findByScheduleIdIn(scheduleIds);
+                for (ScheduleException exception : exceptions) {
+                    exceptionsBySchedule
+                        .computeIfAbsent(exception.getScheduleId(), key -> new ArrayList<>())
+                        .add(exception);
+                }
+            }
+            
             // Count schedules per course (to divide totalSessions among schedules)
             Map<UUID, Integer> schedulesPerCourse = new HashMap<>();
             for (Schedule schedule : allSchedules) {
@@ -124,6 +148,11 @@ public class ClassScheduleService {
                 
                 int numberOfSchedulesForCourse = schedulesPerCourse.getOrDefault(schedule.getCourseId(), 1);
                 LocalDate inactiveDate = courseInactiveDateMap.get(schedule.getCourseId());
+                Map<String, ScheduleException> exceptionMap = new HashMap<>();
+                for (ScheduleException exception : exceptionsBySchedule.getOrDefault(schedule.getId(), Collections.emptyList())) {
+                    String key = buildExceptionKey(exception.getOriginalDate(), exception.getOriginalStartTime());
+                    exceptionMap.put(key, exception);
+                }
                 
                 List<Map<String, Object>> scheduleEvents = calculateScheduleEvents(
                     schedule, 
@@ -132,7 +161,8 @@ public class ClassScheduleService {
                     startDate, 
                     endDate, 
                     maximumCount,
-                    inactiveDate
+                    inactiveDate,
+                    exceptionMap
                 );
                 events.addAll(scheduleEvents);
             }
@@ -187,7 +217,8 @@ public class ClassScheduleService {
                                                                 LocalDate startDate,
                                                                 LocalDate endDate,
                                                                 Integer maximumCount,
-                                                                LocalDate inactiveDate) {
+                                                                LocalDate inactiveDate,
+                                                                Map<String, ScheduleException> exceptionMap) {
         List<Map<String, Object>> events = new ArrayList<>();
         
         LocalDate scheduleStartDate = schedule.getStartDate();
@@ -236,18 +267,18 @@ public class ClassScheduleService {
             // Try to parse RRULE format
             if (recurrenceRule.toUpperCase().startsWith("FREQ=")) {
                 events.addAll(parseRRULE(recurrenceRule, scheduleStartDate, startTime, durationMinutes, 
-                                       courseId, effectiveStartDate, endDate, effectiveMaxCount, inactiveDate));
+                                       courseId, effectiveStartDate, endDate, effectiveMaxCount, inactiveDate, exceptionMap));
             } else {
                 // Fall back to simple recurrence patterns
                 events.addAll(parseSimpleRecurrence(recurrenceRule, scheduleStartDate, startTime, 
                                                    durationMinutes, courseId, effectiveStartDate, 
-                                                   endDate, effectiveMaxCount, dayOfWeekStr, inactiveDate));
+                                                   endDate, effectiveMaxCount, dayOfWeekStr, inactiveDate, exceptionMap));
             }
         } else {
             // Use dayOfWeek for weekly recurrence
             events.addAll(calculateWeeklyEvents(dayOfWeekStr, scheduleStartDate, startTime, 
                                               durationMinutes, courseId, effectiveStartDate, 
-                                              endDate, effectiveMaxCount, inactiveDate));
+                                              endDate, effectiveMaxCount, inactiveDate, exceptionMap));
         }
         
         return events;
@@ -401,7 +432,8 @@ public class ClassScheduleService {
                                                    LocalDate startDate,
                                                    LocalDate endDate,
                                                    Integer maximumCount,
-                                                   LocalDate inactiveDate) {
+                                                   LocalDate inactiveDate,
+                                                   Map<String, ScheduleException> exceptionMap) {
         List<Map<String, Object>> events = new ArrayList<>();
         
         // Parse RRULE components
@@ -433,10 +465,13 @@ public class ClassScheduleService {
                     if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                         break;
                     }
-                    if (!currentDate.isBefore(scheduleStartDate)) {
+                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+                    if (overrideEvent == null) {
                         events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
-                        count++;
+                    } else if (!overrideEvent.isEmpty()) {
+                        events.add(overrideEvent);
                     }
+                    count++;
                     currentDate = currentDate.plusDays(1);
                 }
                 break;
@@ -457,10 +492,13 @@ public class ClassScheduleService {
                     if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                         break;
                     }
-                    if (!currentDate.isBefore(scheduleStartDate)) {
+                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+                    if (overrideEvent == null) {
                         events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
-                        count++;
+                    } else if (!overrideEvent.isEmpty()) {
+                        events.add(overrideEvent);
                     }
+                    count++;
                     currentDate = currentDate.plusWeeks(1);
                 }
                 break;
@@ -481,10 +519,13 @@ public class ClassScheduleService {
                         if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                             break;
                         }
-                        if (!currentDate.isBefore(scheduleStartDate)) {
+                        Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+                        if (overrideEvent == null) {
                             events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
-                            count++;
+                        } else if (!overrideEvent.isEmpty()) {
+                            events.add(overrideEvent);
                         }
+                        count++;
                         currentDate = currentDate.plusMonths(1);
                         if (currentDate.lengthOfMonth() < byMonthDay) {
                             currentDate = LocalDate.of(currentDate.getYear(), currentDate.getMonth(), 
@@ -517,10 +558,13 @@ public class ClassScheduleService {
                         if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                             break;
                         }
-                        if (!currentDate.isBefore(scheduleStartDate)) {
+                        Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+                        if (overrideEvent == null) {
                             events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
-                            count++;
+                        } else if (!overrideEvent.isEmpty()) {
+                            events.add(overrideEvent);
                         }
+                        count++;
                         currentDate = currentDate.plusMonths(1);
                         LocalDate firstOfMonth = LocalDate.of(currentDate.getYear(), currentDate.getMonth(), 1);
                         while (firstOfMonth.getDayOfWeek() != dow) {
@@ -535,7 +579,7 @@ public class ClassScheduleService {
                 // Default to weekly
                 events.addAll(calculateWeeklyEvents(scheduleStartDate.getDayOfWeek().toString(), 
                                                    scheduleStartDate, startTime, durationMinutes, 
-                                                   courseId, startDate, endDate, maximumCount, inactiveDate));
+                                                   courseId, startDate, endDate, maximumCount, inactiveDate, exceptionMap));
         }
         
         return events;
@@ -553,13 +597,14 @@ public class ClassScheduleService {
                                                               LocalDate endDate,
                                                               Integer maximumCount,
                                                               String dayOfWeekStr,
-                                                              LocalDate inactiveDate) {
+                                                              LocalDate inactiveDate,
+                                                              Map<String, ScheduleException> exceptionMap) {
         List<Map<String, Object>> events = new ArrayList<>();
         
         switch (recurrence.toLowerCase()) {
             case "weekly":
                 events.addAll(calculateWeeklyEvents(dayOfWeekStr, scheduleStartDate, startTime, 
-                                                  durationMinutes, courseId, startDate, endDate, maximumCount, inactiveDate));
+                                                  durationMinutes, courseId, startDate, endDate, maximumCount, inactiveDate, exceptionMap));
                 break;
             case "monthly":
                 // Monthly on the same day
@@ -574,7 +619,12 @@ public class ClassScheduleService {
                     if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                         break;
                     }
-                    events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
+                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+                    if (overrideEvent == null) {
+                        events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
+                    } else if (!overrideEvent.isEmpty()) {
+                        events.add(overrideEvent);
+                    }
                     count++;
                     currentDate = currentDate.plusMonths(1);
                     if (currentDate.lengthOfMonth() < scheduleStartDate.getDayOfMonth()) {
@@ -590,7 +640,12 @@ public class ClassScheduleService {
                     if (inactiveDate != null && dailyDate.isAfter(inactiveDate)) {
                         break;
                     }
-                    events.add(createEvent(courseId, dailyDate, startTime, durationMinutes));
+                    Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, dailyDate, startTime, durationMinutes, exceptionMap);
+                    if (overrideEvent == null) {
+                        events.add(createEvent(courseId, dailyDate, startTime, durationMinutes));
+                    } else if (!overrideEvent.isEmpty()) {
+                        events.add(overrideEvent);
+                    }
                     dailyCount++;
                     dailyDate = dailyDate.plusDays(1);
                 }
@@ -598,7 +653,7 @@ public class ClassScheduleService {
             default:
                 // Default to weekly
                 events.addAll(calculateWeeklyEvents(dayOfWeekStr, scheduleStartDate, startTime, 
-                                                  durationMinutes, courseId, startDate, endDate, maximumCount, inactiveDate));
+                                                  durationMinutes, courseId, startDate, endDate, maximumCount, inactiveDate, exceptionMap));
         }
         
         return events;
@@ -615,7 +670,8 @@ public class ClassScheduleService {
                                                               LocalDate startDate,
                                                               LocalDate endDate,
                                                               Integer maximumCount,
-                                                              LocalDate inactiveDate) {
+                                                              LocalDate inactiveDate,
+                                                              Map<String, ScheduleException> exceptionMap) {
         List<Map<String, Object>> events = new ArrayList<>();
         
         DayOfWeek targetDay = parseDayOfWeek(dayOfWeekStr);
@@ -642,7 +698,12 @@ public class ClassScheduleService {
             if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
                 break;
             }
-            events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
+            Map<String, Object> overrideEvent = applyExceptionIfPresent(courseId, currentDate, startTime, durationMinutes, exceptionMap);
+            if (overrideEvent == null) {
+                events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
+            } else if (!overrideEvent.isEmpty()) {
+                events.add(overrideEvent);
+            }
             count++;
             currentDate = currentDate.plusWeeks(1);
         }
@@ -748,5 +809,31 @@ public class ClassScheduleService {
         response.put("courses", new ArrayList<>());
         response.put("events", new ArrayList<>());
         return response;
+    }
+
+    private Map<String, Object> applyExceptionIfPresent(UUID courseId,
+                                                         LocalDate originalDate,
+                                                         LocalTime originalStartTime,
+                                                         Long durationMinutes,
+                                                         Map<String, ScheduleException> exceptionMap) {
+        String key = buildExceptionKey(originalDate, originalStartTime);
+        ScheduleException exception = exceptionMap.get(key);
+        if (exception == null) {
+            return null;
+        }
+        
+        if (Boolean.TRUE.equals(exception.getIsCancelled())) {
+            return Collections.emptyMap();
+        }
+        
+        LocalDate eventDate = exception.getNewDate() != null ? exception.getNewDate() : originalDate;
+        LocalTime eventStart = exception.getNewStartTime() != null ? exception.getNewStartTime() : originalStartTime;
+        Long eventDuration = exception.getNewDurationMinutes() != null ? exception.getNewDurationMinutes() : durationMinutes;
+        
+        return createEvent(courseId, eventDate, eventStart, eventDuration);
+    }
+    
+    private String buildExceptionKey(LocalDate date, LocalTime time) {
+        return date.toString() + "|" + time.toString();
     }
 }
