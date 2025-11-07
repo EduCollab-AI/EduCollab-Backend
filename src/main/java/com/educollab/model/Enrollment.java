@@ -25,6 +25,9 @@ public class Enrollment {
     @Column(name = "status")
     private String status;
     
+    @Column(name = "deactivated_at")
+    private LocalDateTime deactivatedAt;
+    
     // Constructors
     public Enrollment() {}
     
@@ -73,6 +76,14 @@ public class Enrollment {
     
     public void setStatus(String status) {
         this.status = status;
+    }
+    
+    public LocalDateTime getDeactivatedAt() {
+        return deactivatedAt;
+    }
+    
+    public void setDeactivatedAt(LocalDateTime deactivatedAt) {
+        this.deactivatedAt = deactivatedAt;
     }
 }
 

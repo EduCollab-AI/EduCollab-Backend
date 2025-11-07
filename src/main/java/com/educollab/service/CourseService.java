@@ -258,7 +258,7 @@ public class CourseService {
     public Map<String, Object> deleteStudentEnrollment(String studentIdStr, String courseIdStr) {
         try {
             System.out.println("========================================");
-            System.out.println("🗑️ Deleting student enrollment:");
+            System.out.println("🗑️ Deactivating student enrollment:");
             System.out.println("Student ID: " + studentIdStr);
             System.out.println("Course ID: " + courseIdStr);
             System.out.println("========================================");
@@ -285,43 +285,37 @@ public class CourseService {
             UUID enrollmentId = enrollment.getId();
             System.out.println("✅ Found enrollment: " + enrollmentId + " for student: " + studentId + " and course: " + courseId);
             
-            // Step 4: Delete all schedules for this course
-            List<Schedule> schedules = scheduleRepository.findByCourseId(courseId);
-            int schedulesDeletedCount = 0;
-            if (!schedules.isEmpty()) {
-                scheduleRepository.deleteAll(schedules);
-                schedulesDeletedCount = schedules.size();
-                System.out.println("✅ Deleted " + schedulesDeletedCount + " schedule(s) for course");
-            } else {
-                System.out.println("ℹ️ No schedules found for course");
-            }
+            // Step 4: Mark enrollment as inactive instead of deleting
+            LocalDateTime deactivatedAt = LocalDateTime.now();
+            enrollment.setStatus("inactive");
+            enrollment.setDeactivatedAt(deactivatedAt);
+            enrollmentRepository.save(enrollment);
             
-            // Step 5: Delete the enrollment
-            enrollmentRepository.delete(enrollment);
-            System.out.println("✅ Enrollment deleted successfully");
+            System.out.println("✅ Enrollment marked as inactive (deactivated at " + deactivatedAt + ")");
             System.out.println("========================================");
             
             // Build response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Student enrollment and schedules deleted successfully");
+            response.put("message", "Student enrollment marked inactive successfully");
             
             Map<String, Object> data = new HashMap<>();
             data.put("enrollmentId", enrollmentId.toString());
             data.put("courseId", courseId.toString());
-            data.put("schedulesDeleted", schedulesDeletedCount);
+            data.put("status", enrollment.getStatus());
+            data.put("deactivatedAt", deactivatedAt.toString());
             
             response.put("data", data);
             
             return response;
             
         } catch (Exception e) {
-            System.err.println("❌ Error deleting student enrollment: " + e.getMessage());
+            System.err.println("❌ Error deactivating student enrollment: " + e.getMessage());
             e.printStackTrace();
             
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
-            errorResponse.put("message", "Failed to delete student enrollment: " + e.getMessage());
+            errorResponse.put("message", "Failed to deactivate student enrollment: " + e.getMessage());
             
             return errorResponse;
         }

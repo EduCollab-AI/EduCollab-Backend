@@ -65,15 +65,28 @@ public class ClassScheduleService {
             
             System.out.println("✅ Found " + enrollments.size() + " enrollment(s)");
             
-            // Step 2: Extract unique course IDs
+            // Step 2: Extract unique course IDs and track status/inactive dates
             Set<UUID> courseIds = new HashSet<>();
+            Map<UUID, String> courseStatusMap = new HashMap<>();
+            Map<UUID, LocalDate> courseInactiveDateMap = new HashMap<>();
+            
             for (Enrollment enrollment : enrollments) {
-                if ("active".equalsIgnoreCase(enrollment.getStatus())) {
-                    courseIds.add(enrollment.getCourseId());
+                UUID courseId = enrollment.getCourseId();
+                courseIds.add(courseId);
+                String status = enrollment.getStatus() != null ? enrollment.getStatus() : "active";
+                courseStatusMap.put(courseId, status);
+                
+                if ("inactive".equalsIgnoreCase(status)) {
+                    LocalDate inactiveDate = enrollment.getDeactivatedAt() != null
+                        ? enrollment.getDeactivatedAt().toLocalDate()
+                        : LocalDate.now();
+                    courseInactiveDateMap.put(courseId, inactiveDate);
+                } else {
+                    courseInactiveDateMap.put(courseId, null);
                 }
             }
             
-            System.out.println("✅ Found " + courseIds.size() + " active course(s)");
+            System.out.println("✅ Found " + courseIds.size() + " course(s) (active + inactive)");
             
             // Step 3: Get all courses
             Map<UUID, Course> coursesMap = new HashMap<>();
@@ -110,6 +123,7 @@ public class ClassScheduleService {
                 }
                 
                 int numberOfSchedulesForCourse = schedulesPerCourse.getOrDefault(schedule.getCourseId(), 1);
+                LocalDate inactiveDate = courseInactiveDateMap.get(schedule.getCourseId());
                 
                 List<Map<String, Object>> scheduleEvents = calculateScheduleEvents(
                     schedule, 
@@ -117,7 +131,8 @@ public class ClassScheduleService {
                     numberOfSchedulesForCourse,
                     startDate, 
                     endDate, 
-                    maximumCount
+                    maximumCount,
+                    inactiveDate
                 );
                 events.addAll(scheduleEvents);
             }
@@ -140,6 +155,12 @@ public class ClassScheduleService {
                 courseData.put("teacherName", course.getTeacherName());
                 courseData.put("location", course.getLocation());
                 courseData.put("description", course.getDescription());
+                String status = courseStatusMap.getOrDefault(course.getId(), "active");
+                courseData.put("status", status);
+                LocalDate inactiveDate = courseInactiveDateMap.get(course.getId());
+                if (inactiveDate != null) {
+                    courseData.put("inactiveDate", inactiveDate.toString());
+                }
                 coursesList.add(courseData);
             }
             
@@ -165,7 +186,8 @@ public class ClassScheduleService {
                                                                 int numberOfSchedulesForCourse,
                                                                 LocalDate startDate,
                                                                 LocalDate endDate,
-                                                                Integer maximumCount) {
+                                                                Integer maximumCount,
+                                                                LocalDate inactiveDate) {
         List<Map<String, Object>> events = new ArrayList<>();
         
         LocalDate scheduleStartDate = schedule.getStartDate();
@@ -177,6 +199,12 @@ public class ClassScheduleService {
         
         // Use effective start date (max of schedule start and requested start)
         LocalDate effectiveStartDate = scheduleStartDate.isAfter(startDate) ? scheduleStartDate : startDate;
+        
+        // If enrollment is inactive before the effective start date, skip entirely
+        if (inactiveDate != null && inactiveDate.isBefore(effectiveStartDate)) {
+            System.out.println("ℹ️ Course is inactive before requested date range; skipping schedule events");
+            return events;
+        }
         
         // Calculate sessions per schedule: divide totalSessions by number of schedules for this course
         // Use integer division - if there's a remainder, it's acceptable (each schedule gets floor division)
@@ -200,25 +228,26 @@ public class ClassScheduleService {
                           ", Sessions per Schedule: " + sessionsPerSchedule +
                           ", Already Occurred (this schedule): " + sessionsAlreadyOccurred + 
                           ", Remaining (this schedule): " + countOfCoursesLeft + 
-                          ", Effective Max Count: " + effectiveMaxCount);
+                          ", Effective Max Count: " + effectiveMaxCount +
+                          (inactiveDate != null ? ", Inactive Date: " + inactiveDate : ""));
         
         // Parse recurrence rule or use dayOfWeek
         if (recurrenceRule != null && !recurrenceRule.isEmpty()) {
             // Try to parse RRULE format
             if (recurrenceRule.toUpperCase().startsWith("FREQ=")) {
                 events.addAll(parseRRULE(recurrenceRule, scheduleStartDate, startTime, durationMinutes, 
-                                       courseId, effectiveStartDate, endDate, effectiveMaxCount));
+                                       courseId, effectiveStartDate, endDate, effectiveMaxCount, inactiveDate));
             } else {
                 // Fall back to simple recurrence patterns
                 events.addAll(parseSimpleRecurrence(recurrenceRule, scheduleStartDate, startTime, 
                                                    durationMinutes, courseId, effectiveStartDate, 
-                                                   endDate, effectiveMaxCount, dayOfWeekStr));
+                                                   endDate, effectiveMaxCount, dayOfWeekStr, inactiveDate));
             }
         } else {
             // Use dayOfWeek for weekly recurrence
             events.addAll(calculateWeeklyEvents(dayOfWeekStr, scheduleStartDate, startTime, 
                                               durationMinutes, courseId, effectiveStartDate, 
-                                              endDate, effectiveMaxCount));
+                                              endDate, effectiveMaxCount, inactiveDate));
         }
         
         return events;
@@ -371,7 +400,8 @@ public class ClassScheduleService {
                                                    UUID courseId,
                                                    LocalDate startDate,
                                                    LocalDate endDate,
-                                                   Integer maximumCount) {
+                                                   Integer maximumCount,
+                                                   LocalDate inactiveDate) {
         List<Map<String, Object>> events = new ArrayList<>();
         
         // Parse RRULE components
@@ -400,6 +430,9 @@ public class ClassScheduleService {
         switch (freq) {
             case "DAILY":
                 while (!currentDate.isAfter(endDate) && (maximumCount == null || count < maximumCount)) {
+                    if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
+                        break;
+                    }
                     if (!currentDate.isBefore(scheduleStartDate)) {
                         events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
                         count++;
@@ -421,6 +454,9 @@ public class ClassScheduleService {
                 }
                 
                 while (!currentDate.isAfter(endDate) && (maximumCount == null || count < maximumCount)) {
+                    if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
+                        break;
+                    }
                     if (!currentDate.isBefore(scheduleStartDate)) {
                         events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
                         count++;
@@ -442,6 +478,9 @@ public class ClassScheduleService {
                     }
                     
                     while (!currentDate.isAfter(endDate) && (maximumCount == null || count < maximumCount)) {
+                        if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
+                            break;
+                        }
                         if (!currentDate.isBefore(scheduleStartDate)) {
                             events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
                             count++;
@@ -475,6 +514,9 @@ public class ClassScheduleService {
                     }
                     
                     while (!currentDate.isAfter(endDate) && (maximumCount == null || count < maximumCount)) {
+                        if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
+                            break;
+                        }
                         if (!currentDate.isBefore(scheduleStartDate)) {
                             events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
                             count++;
@@ -493,7 +535,7 @@ public class ClassScheduleService {
                 // Default to weekly
                 events.addAll(calculateWeeklyEvents(scheduleStartDate.getDayOfWeek().toString(), 
                                                    scheduleStartDate, startTime, durationMinutes, 
-                                                   courseId, startDate, endDate, maximumCount));
+                                                   courseId, startDate, endDate, maximumCount, inactiveDate));
         }
         
         return events;
@@ -510,13 +552,14 @@ public class ClassScheduleService {
                                                               LocalDate startDate,
                                                               LocalDate endDate,
                                                               Integer maximumCount,
-                                                              String dayOfWeekStr) {
+                                                              String dayOfWeekStr,
+                                                              LocalDate inactiveDate) {
         List<Map<String, Object>> events = new ArrayList<>();
         
         switch (recurrence.toLowerCase()) {
             case "weekly":
                 events.addAll(calculateWeeklyEvents(dayOfWeekStr, scheduleStartDate, startTime, 
-                                                  durationMinutes, courseId, startDate, endDate, maximumCount));
+                                                  durationMinutes, courseId, startDate, endDate, maximumCount, inactiveDate));
                 break;
             case "monthly":
                 // Monthly on the same day
@@ -528,6 +571,9 @@ public class ClassScheduleService {
                 }
                 int count = 0;
                 while (!currentDate.isAfter(endDate) && (maximumCount == null || count < maximumCount)) {
+                    if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
+                        break;
+                    }
                     events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
                     count++;
                     currentDate = currentDate.plusMonths(1);
@@ -541,6 +587,9 @@ public class ClassScheduleService {
                 LocalDate dailyDate = scheduleStartDate.isBefore(startDate) ? startDate : scheduleStartDate;
                 int dailyCount = 0;
                 while (!dailyDate.isAfter(endDate) && (maximumCount == null || dailyCount < maximumCount)) {
+                    if (inactiveDate != null && dailyDate.isAfter(inactiveDate)) {
+                        break;
+                    }
                     events.add(createEvent(courseId, dailyDate, startTime, durationMinutes));
                     dailyCount++;
                     dailyDate = dailyDate.plusDays(1);
@@ -549,7 +598,7 @@ public class ClassScheduleService {
             default:
                 // Default to weekly
                 events.addAll(calculateWeeklyEvents(dayOfWeekStr, scheduleStartDate, startTime, 
-                                                  durationMinutes, courseId, startDate, endDate, maximumCount));
+                                                  durationMinutes, courseId, startDate, endDate, maximumCount, inactiveDate));
         }
         
         return events;
@@ -565,7 +614,8 @@ public class ClassScheduleService {
                                                               UUID courseId,
                                                               LocalDate startDate,
                                                               LocalDate endDate,
-                                                              Integer maximumCount) {
+                                                              Integer maximumCount,
+                                                              LocalDate inactiveDate) {
         List<Map<String, Object>> events = new ArrayList<>();
         
         DayOfWeek targetDay = parseDayOfWeek(dayOfWeekStr);
@@ -589,6 +639,9 @@ public class ClassScheduleService {
         
         int count = 0;
         while (!currentDate.isAfter(endDate) && (maximumCount == null || count < maximumCount)) {
+            if (inactiveDate != null && currentDate.isAfter(inactiveDate)) {
+                break;
+            }
             events.add(createEvent(courseId, currentDate, startTime, durationMinutes));
             count++;
             currentDate = currentDate.plusWeeks(1);
