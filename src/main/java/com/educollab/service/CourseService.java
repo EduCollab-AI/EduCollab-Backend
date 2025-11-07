@@ -253,5 +253,70 @@ public class CourseService {
                 throw new IllegalArgumentException("Invalid day of week: " + dayOfWeek);
         }
     }
+    
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> deleteCourse(String courseIdStr) {
+        try {
+            System.out.println("========================================");
+            System.out.println("🗑️ Deleting course:");
+            System.out.println("Course ID: " + courseIdStr);
+            System.out.println("========================================");
+            
+            UUID courseId = UUID.fromString(courseIdStr);
+            
+            // Step 1: Verify course exists
+            Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found with ID: " + courseIdStr));
+            
+            System.out.println("✅ Found course: " + course.getName() + " (ID: " + courseId + ")");
+            
+            // Step 2: Delete all schedules for this course
+            List<Schedule> schedules = scheduleRepository.findByCourseId(courseId);
+            if (!schedules.isEmpty()) {
+                scheduleRepository.deleteAll(schedules);
+                System.out.println("✅ Deleted " + schedules.size() + " schedule(s) for course");
+            } else {
+                System.out.println("ℹ️ No schedules found for course");
+            }
+            
+            // Step 3: Delete all enrollments for this course
+            List<Enrollment> enrollments = enrollmentRepository.findByCourseId(courseId);
+            if (!enrollments.isEmpty()) {
+                enrollmentRepository.deleteAll(enrollments);
+                System.out.println("✅ Deleted " + enrollments.size() + " enrollment(s) for course");
+            } else {
+                System.out.println("ℹ️ No enrollments found for course");
+            }
+            
+            // Step 4: Delete the course
+            courseRepository.delete(course);
+            System.out.println("✅ Course deleted successfully");
+            System.out.println("========================================");
+            
+            // Build response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Course deleted successfully");
+            
+            Map<String, Object> data = new HashMap<>();
+            data.put("courseId", courseId.toString());
+            data.put("schedulesDeleted", schedules.size());
+            data.put("enrollmentsDeleted", enrollments.size());
+            
+            response.put("data", data);
+            
+            return response;
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error deleting course: " + e.getMessage());
+            e.printStackTrace();
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Failed to delete course: " + e.getMessage());
+            
+            return errorResponse;
+        }
+    }
 }
 

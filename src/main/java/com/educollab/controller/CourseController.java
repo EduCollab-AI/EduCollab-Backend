@@ -32,5 +32,17 @@ public class CourseController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
         }
     }
+    
+    @DeleteMapping("/{courseId}")
+    public ResponseEntity<Map<String, Object>> deleteCourse(@PathVariable String courseId) {
+        System.out.println("Delete course endpoint accessed with courseId: " + courseId);
+        Map<String, Object> result = courseService.deleteCourse(courseId);
+        
+        if (result.get("success").equals(true)) {
+            return ResponseEntity.ok(result);
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+        }
+    }
 }
 
