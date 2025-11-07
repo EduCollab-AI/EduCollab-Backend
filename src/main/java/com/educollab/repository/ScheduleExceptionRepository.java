@@ -17,4 +17,5 @@ public interface ScheduleExceptionRepository extends JpaRepository<ScheduleExcep
                                                                                      LocalDate originalDate,
                                                                                      LocalTime originalStartTime);
     List<ScheduleException> findByScheduleIdIn(Collection<UUID> scheduleIds);
+    List<ScheduleException> findByScheduleId(UUID scheduleId);
 }

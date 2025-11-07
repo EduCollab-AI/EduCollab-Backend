@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,11 +45,11 @@ public class ScheduleService {
             LocalTime baseOriginalStartTime = schedule.getStartTime();
             Long baseDuration = schedule.getDurationMinutes();
             
-            final LocalDate originalDate = request.get("original_date") != null
+            LocalDate requestedOriginalDate = request.get("original_date") != null
                 ? LocalDate.parse(request.get("original_date").toString(), DATE_FORMAT)
                 : baseOriginalDate;
             
-            final LocalTime originalStartTime = request.get("original_start_time") != null
+            LocalTime requestedOriginalStartTime = request.get("original_start_time") != null
                 ? LocalTime.parse(request.get("original_start_time").toString(), TIME_FORMAT)
                 : baseOriginalStartTime;
             
@@ -75,10 +76,10 @@ public class ScheduleService {
             }
             
             boolean hasMeaningfulChange = Boolean.TRUE.equals(isCancelled);
-            if (newDate != null && !newDate.equals(originalDate)) {
+            if (newDate != null && !newDate.equals(requestedOriginalDate)) {
                 hasMeaningfulChange = true;
             }
-            if (newStartTime != null && !newStartTime.equals(originalStartTime)) {
+            if (newStartTime != null && !newStartTime.equals(requestedOriginalStartTime)) {
                 hasMeaningfulChange = true;
             }
             if (newDurationMinutes != null && !newDurationMinutes.equals(baseDuration)) {
@@ -89,9 +90,21 @@ public class ScheduleService {
                 throw new RuntimeException("No changes detected. Provide updated fields or set is_cancelled to true.");
             }
             
+            // Attempt to locate existing exception by original occurrence
             Optional<ScheduleException> existingOpt = scheduleExceptionRepository
-                .findByScheduleIdAndOriginalDateAndOriginalStartTime(scheduleId, originalDate, originalStartTime);
-            ScheduleException exception = existingOpt.orElseGet(() -> new ScheduleException(scheduleId, originalDate, originalStartTime));
+                .findByScheduleIdAndOriginalDateAndOriginalStartTime(scheduleId, requestedOriginalDate, requestedOriginalStartTime);
+            
+            ScheduleException exception;
+            if (existingOpt.isPresent()) {
+                exception = existingOpt.get();
+            } else {
+                // Try to locate exception by matching new values (already rescheduled occurrence)
+                exception = findExceptionByNewOccurrence(scheduleId, requestedOriginalDate, requestedOriginalStartTime);
+                if (exception == null) {
+                    // Create new exception anchored on the supplied original occurrence
+                    exception = new ScheduleException(scheduleId, requestedOriginalDate, requestedOriginalStartTime);
+                }
+            }
             
             exception.setIsCancelled(isCancelled);
             exception.setNewDate(newDate);
@@ -125,5 +138,30 @@ public class ScheduleService {
             e.printStackTrace();
             throw new RuntimeException("Failed to create schedule exception: " + e.getMessage(), e);
         }
+    }
+    
+    private ScheduleException findExceptionByNewOccurrence(UUID scheduleId,
+                                                            LocalDate occurrenceDate,
+                                                            LocalTime occurrenceStartTime) {
+        List<ScheduleException> exceptions = scheduleExceptionRepository.findByScheduleId(scheduleId);
+        for (ScheduleException candidate : exceptions) {
+            if (candidate.getNewDate() == null) {
+                continue;
+            }
+            if (!candidate.getNewDate().equals(occurrenceDate)) {
+                continue;
+            }
+            LocalTime candidateNewStart = candidate.getNewStartTime();
+            boolean timeMatches;
+            if (candidateNewStart != null) {
+                timeMatches = candidateNewStart.equals(occurrenceStartTime);
+            } else {
+                timeMatches = candidate.getOriginalStartTime().equals(occurrenceStartTime);
+            }
+            if (timeMatches) {
+                return candidate;
+            }
+        }
+        return null;
     }
 }
