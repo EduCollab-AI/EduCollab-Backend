@@ -7,7 +7,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -19,7 +18,7 @@ public class PaymentController {
     private PaymentQueryService paymentQueryService;
     
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> getPaymentEvents(
+    public ResponseEntity<Map<String, Object>> getPaymentEvents(
             @RequestParam String studentId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
@@ -41,7 +40,7 @@ public class PaymentController {
             endDate = LocalDate.now().plusMonths(3); // Default 3 months ahead
         }
         
-        List<Map<String, Object>> result = paymentQueryService.getPaymentEvents(
+        Map<String, Object> result = paymentQueryService.getPaymentEvents(
             studentId, 
             startDate, 
             endDate, 

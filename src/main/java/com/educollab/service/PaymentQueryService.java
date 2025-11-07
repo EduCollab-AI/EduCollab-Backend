@@ -28,10 +28,10 @@ public class PaymentQueryService {
     private StudentRepository studentRepository;
     
     @Transactional
-    public List<Map<String, Object>> getPaymentEvents(String studentIdStr,
-                                                       LocalDate startDate,
-                                                       LocalDate endDate,
-                                                       Integer maximumCount) {
+    public Map<String, Object> getPaymentEvents(String studentIdStr,
+                                                LocalDate startDate,
+                                                LocalDate endDate,
+                                                Integer maximumCount) {
         try {
             System.out.println("========================================");
             System.out.println("💰 Getting payment events:");
@@ -49,6 +49,10 @@ public class PaymentQueryService {
             
             System.out.println("✅ Student validated: " + student.getName());
             
+            // Fetch payment schedules once (used for formatting and event generation)
+            List<PaymentSchedule> paymentSchedules = paymentScheduleRepository.findByStudentId(studentId);
+            System.out.println("✅ Found " + paymentSchedules.size() + " payment schedule(s)");
+            
             // Step 1: Query payment_events by studentId and dueDate range
             List<PaymentEvent> existingEvents = paymentEventRepository.findByStudentIdAndDueDateRange(
                 studentId, startDate, endDate
@@ -59,7 +63,10 @@ public class PaymentQueryService {
             // Step 2: If count > maximumCount, return immediately
             if (maximumCount != null && existingEvents.size() > maximumCount) {
                 System.out.println("⚠️ Event count (" + existingEvents.size() + ") exceeds maximumCount (" + maximumCount + "), returning existing events");
-                return formatPaymentEvents(existingEvents.subList(0, maximumCount));
+                return buildPaymentResponse(
+                    formatPaymentSchedules(paymentSchedules),
+                    formatPaymentEvents(existingEvents.subList(0, maximumCount))
+                );
             }
             
             // Step 3: Check if we need to generate new events
@@ -80,10 +87,6 @@ public class PaymentQueryService {
             }
             
             if (shouldGenerate) {
-                // Generate new payment events from payment_schedules
-                List<PaymentSchedule> paymentSchedules = paymentScheduleRepository.findByStudentId(studentId);
-                System.out.println("✅ Found " + paymentSchedules.size() + " payment schedule(s)");
-                
                 List<PaymentEvent> newEvents = generatePaymentEventsFromSchedules(
                     paymentSchedules, 
                     studentId, 
@@ -113,13 +116,24 @@ public class PaymentQueryService {
             System.out.println("✅ Returning " + existingEvents.size() + " payment event(s)");
             System.out.println("========================================");
             
-            return formatPaymentEvents(existingEvents);
+            return buildPaymentResponse(
+                formatPaymentSchedules(paymentSchedules),
+                formatPaymentEvents(existingEvents)
+            );
             
         } catch (Exception e) {
             System.err.println("❌ Error getting payment events: " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException("Failed to get payment events: " + e.getMessage(), e);
         }
+    }
+    
+    private Map<String, Object> buildPaymentResponse(List<Map<String, Object>> schedules,
+                                                     List<Map<String, Object>> events) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("payment_schedules", schedules);
+        response.put("payment_events", events);
+        return response;
     }
     
     /**
@@ -203,6 +217,21 @@ public class PaymentQueryService {
         }
         
         return newEvents;
+    }
+    
+    private List<Map<String, Object>> formatPaymentSchedules(List<PaymentSchedule> schedules) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (PaymentSchedule schedule : schedules) {
+            Map<String, Object> scheduleData = new HashMap<>();
+            scheduleData.put("id", schedule.getId() != null ? schedule.getId().toString() : null);
+            scheduleData.put("billing_rrule", schedule.getBillingRule());
+            scheduleData.put("startDate", schedule.getStartDate() != null ? schedule.getStartDate().toString() : null);
+            scheduleData.put("amount", schedule.getAmount());
+            scheduleData.put("item", schedule.getItem());
+            scheduleData.put("note", schedule.getNote());
+            result.add(scheduleData);
+        }
+        return result;
     }
     
     /**
