@@ -255,16 +255,16 @@ public class CourseService {
     }
     
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> deleteStudentEnrollment(String studentIdStr, String enrollmentIdStr) {
+    public Map<String, Object> deleteStudentEnrollment(String studentIdStr, String courseIdStr) {
         try {
             System.out.println("========================================");
             System.out.println("🗑️ Deleting student enrollment:");
             System.out.println("Student ID: " + studentIdStr);
-            System.out.println("Enrollment ID: " + enrollmentIdStr);
+            System.out.println("Course ID: " + courseIdStr);
             System.out.println("========================================");
             
             UUID studentId = UUID.fromString(studentIdStr);
-            UUID enrollmentId = UUID.fromString(enrollmentIdStr);
+            UUID courseId = UUID.fromString(courseIdStr);
             
             // Step 1: Verify student exists
             Student student = studentRepository.findById(studentId)
@@ -272,18 +272,18 @@ public class CourseService {
             
             System.out.println("✅ Found student: " + student.getName() + " (ID: " + studentId + ")");
             
-            // Step 2: Verify enrollment exists and belongs to this student
-            Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
-                .orElseThrow(() -> new RuntimeException("Enrollment not found with ID: " + enrollmentIdStr));
+            // Step 2: Verify course exists
+            Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found with ID: " + courseIdStr));
             
-            if (!enrollment.getStudentId().equals(studentId)) {
-                throw new RuntimeException("Enrollment does not belong to the specified student");
-            }
+            System.out.println("✅ Found course: " + course.getName() + " (ID: " + courseId + ")");
             
-            System.out.println("✅ Found enrollment: " + enrollmentId + " for course: " + enrollment.getCourseId());
+            // Step 3: Find enrollment by studentId and courseId
+            Enrollment enrollment = enrollmentRepository.findByStudentIdAndCourseId(studentId, courseId)
+                .orElseThrow(() -> new RuntimeException("Enrollment not found for student " + studentIdStr + " and course " + courseIdStr));
             
-            // Step 3: Get courseId from enrollment
-            UUID courseId = enrollment.getCourseId();
+            UUID enrollmentId = enrollment.getId();
+            System.out.println("✅ Found enrollment: " + enrollmentId + " for student: " + studentId + " and course: " + courseId);
             
             // Step 4: Delete all schedules for this course
             List<Schedule> schedules = scheduleRepository.findByCourseId(courseId);
