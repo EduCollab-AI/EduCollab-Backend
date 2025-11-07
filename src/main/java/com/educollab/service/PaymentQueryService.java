@@ -478,5 +478,107 @@ public class PaymentQueryService {
         
         return eventData;
     }
+    
+    @Transactional
+    public Map<String, Object> deletePaymentSchedule(String studentIdStr, String scheduleIdStr) {
+        try {
+            System.out.println("========================================");
+            System.out.println("🗑️ Deleting payment schedule:");
+            System.out.println("Student ID: " + studentIdStr);
+            System.out.println("Schedule ID: " + scheduleIdStr);
+            System.out.println("========================================");
+            
+            UUID studentId = UUID.fromString(studentIdStr);
+            UUID scheduleId = UUID.fromString(scheduleIdStr);
+            
+            // Validate student exists
+            Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentIdStr));
+            System.out.println("✅ Student validated: " + student.getName());
+            
+            // Validate payment schedule exists and belongs to student
+            PaymentSchedule schedule = paymentScheduleRepository.findById(scheduleId)
+                .orElseThrow(() -> new RuntimeException("Payment schedule not found with ID: " + scheduleIdStr));
+            
+            if (!schedule.getStudentId().equals(studentId)) {
+                throw new RuntimeException("Payment schedule does not belong to the specified student");
+            }
+            
+            // Delete schedule (existing payment events remain for record keeping)
+            paymentScheduleRepository.delete(schedule);
+            System.out.println("✅ Payment schedule deleted successfully");
+            System.out.println("========================================");
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Payment schedule deleted successfully");
+            
+            Map<String, Object> data = new HashMap<>();
+            data.put("paymentScheduleId", scheduleId.toString());
+            response.put("data", data);
+            
+            return response;
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error deleting payment schedule: " + e.getMessage());
+            e.printStackTrace();
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Failed to delete payment schedule: " + e.getMessage());
+            return errorResponse;
+        }
+    }
+    
+    @Transactional
+    public Map<String, Object> deletePaymentEvent(String studentIdStr, String paymentEventIdStr) {
+        try {
+            System.out.println("========================================");
+            System.out.println("🗑️ Deleting payment event:");
+            System.out.println("Student ID: " + studentIdStr);
+            System.out.println("Payment Event ID: " + paymentEventIdStr);
+            System.out.println("========================================");
+            
+            UUID studentId = UUID.fromString(studentIdStr);
+            UUID paymentEventId = UUID.fromString(paymentEventIdStr);
+            
+            // Validate student exists
+            Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentIdStr));
+            System.out.println("✅ Student validated: " + student.getName());
+            
+            // Validate payment event exists and belongs to student
+            PaymentEvent paymentEvent = paymentEventRepository.findById(paymentEventId)
+                .orElseThrow(() -> new RuntimeException("Payment event not found with ID: " + paymentEventIdStr));
+            
+            if (!paymentEvent.getStudentId().equals(studentId)) {
+                throw new RuntimeException("Payment event does not belong to the specified student");
+            }
+            
+            // Delete payment event
+            paymentEventRepository.delete(paymentEvent);
+            System.out.println("✅ Payment event deleted successfully");
+            System.out.println("========================================");
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Payment event deleted successfully");
+            
+            Map<String, Object> data = new HashMap<>();
+            data.put("paymentEventId", paymentEventId.toString());
+            response.put("data", data);
+            
+            return response;
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error deleting payment event: " + e.getMessage());
+            e.printStackTrace();
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Failed to delete payment event: " + e.getMessage());
+            return errorResponse;
+        }
+    }
 }
 

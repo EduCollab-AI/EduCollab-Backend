@@ -69,4 +69,46 @@ public class PaymentController {
         
         return ResponseEntity.ok(result);
     }
+    
+    @DeleteMapping("/schedules/{paymentScheduleId}")
+    public ResponseEntity<Map<String, Object>> deletePaymentSchedule(
+            @PathVariable String paymentScheduleId,
+            @RequestParam String studentId) {
+        System.out.println("Delete payment schedule endpoint accessed");
+        System.out.println("Payment Schedule ID: " + paymentScheduleId);
+        System.out.println("Student ID: " + studentId);
+        
+        if (studentId == null || studentId.isEmpty()) {
+            throw new RuntimeException("studentId is required as query parameter");
+        }
+        
+        Map<String, Object> result = paymentQueryService.deletePaymentSchedule(studentId, paymentScheduleId);
+        
+        if (Boolean.TRUE.equals(result.get("success"))) {
+            return ResponseEntity.ok(result);
+        } else {
+            return ResponseEntity.badRequest().body(result);
+        }
+    }
+    
+    @DeleteMapping("/events/{paymentEventId}")
+    public ResponseEntity<Map<String, Object>> deletePaymentEvent(
+            @PathVariable String paymentEventId,
+            @RequestParam String studentId) {
+        System.out.println("Delete payment event endpoint accessed");
+        System.out.println("Payment Event ID: " + paymentEventId);
+        System.out.println("Student ID: " + studentId);
+        
+        if (studentId == null || studentId.isEmpty()) {
+            throw new RuntimeException("studentId is required as query parameter");
+        }
+        
+        Map<String, Object> result = paymentQueryService.deletePaymentEvent(studentId, paymentEventId);
+        
+        if (Boolean.TRUE.equals(result.get("success"))) {
+            return ResponseEntity.ok(result);
+        } else {
+            return ResponseEntity.badRequest().body(result);
+        }
+    }
 }
