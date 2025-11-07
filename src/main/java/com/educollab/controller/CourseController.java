@@ -33,10 +33,19 @@ public class CourseController {
         }
     }
     
-    @DeleteMapping("/{courseId}")
-    public ResponseEntity<Map<String, Object>> deleteCourse(@PathVariable String courseId) {
-        System.out.println("Delete course endpoint accessed with courseId: " + courseId);
-        Map<String, Object> result = courseService.deleteCourse(courseId);
+    @DeleteMapping("/enrollments/{enrollmentId}")
+    public ResponseEntity<Map<String, Object>> deleteStudentEnrollment(
+            @PathVariable String enrollmentId,
+            @RequestParam String studentId) {
+        System.out.println("Delete student enrollment endpoint accessed");
+        System.out.println("Enrollment ID: " + enrollmentId);
+        System.out.println("Student ID: " + studentId);
+        
+        if (studentId == null || studentId.isEmpty()) {
+            throw new RuntimeException("studentId is required as query parameter");
+        }
+        
+        Map<String, Object> result = courseService.deleteStudentEnrollment(studentId, enrollmentId);
         
         if (result.get("success").equals(true)) {
             return ResponseEntity.ok(result);
