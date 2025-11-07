@@ -54,7 +54,7 @@ public class PaymentQueryService {
             System.out.println("✅ Found " + paymentSchedules.size() + " payment schedule(s)");
             
             // Step 1: Query payment_events by studentId and dueDate range
-            List<PaymentEvent> existingEvents = paymentEventRepository.findByStudentIdAndDueDateRange(
+            List<PaymentEvent> existingEvents = paymentEventRepository.findByStudentIdAndDueDateBetweenOrderByDueDateAsc(
                 studentId, startDate, endDate
             );
             
@@ -101,7 +101,7 @@ public class PaymentQueryService {
                     paymentEventRepository.saveAll(newEvents);
                     
                     // Query again to get all events
-                    existingEvents = paymentEventRepository.findByStudentIdAndDueDateRange(
+                    existingEvents = paymentEventRepository.findByStudentIdAndDueDateBetweenOrderByDueDateAsc(
                         studentId, startDate, endDate
                     );
                     System.out.println("✅ Total events after generation: " + existingEvents.size());
@@ -158,7 +158,7 @@ public class PaymentQueryService {
         }
         
         // Calculate how many events we can still generate
-        int existingCount = paymentEventRepository.findByStudentIdAndDueDateRange(studentId, startDate, endDate).size();
+        int existingCount = paymentEventRepository.findByStudentIdAndDueDateBetweenOrderByDueDateAsc(studentId, startDate, endDate).size();
         int remainingSlots = maximumCount != null ? Math.max(0, maximumCount - existingCount) : Integer.MAX_VALUE;
         
         System.out.println("📊 Existing events in range: " + existingCount + ", Remaining slots: " + remainingSlots);
@@ -504,7 +504,19 @@ public class PaymentQueryService {
                 throw new RuntimeException("Payment schedule does not belong to the specified student");
             }
             
-            // Delete schedule (existing payment events remain for record keeping)
+            // Delete future payment events generated from this schedule (keep past/history)
+            LocalDate today = LocalDate.now();
+            List<PaymentEvent> futureEvents = paymentEventRepository.findByPaymentScheduleIdAndDueDateAfter(scheduleId, today);
+            int futureEventsDeleted = 0;
+            if (!futureEvents.isEmpty()) {
+                paymentEventRepository.deleteAll(futureEvents);
+                futureEventsDeleted = futureEvents.size();
+                System.out.println("✅ Deleted " + futureEventsDeleted + " future payment event(s) linked to schedule");
+            } else {
+                System.out.println("ℹ️ No future payment events found for schedule");
+            }
+            
+            // Delete schedule (existing past payment events remain for record keeping)
             paymentScheduleRepository.delete(schedule);
             System.out.println("✅ Payment schedule deleted successfully");
             System.out.println("========================================");
@@ -515,6 +527,7 @@ public class PaymentQueryService {
             
             Map<String, Object> data = new HashMap<>();
             data.put("paymentScheduleId", scheduleId.toString());
+            data.put("futureEventsDeleted", futureEventsDeleted);
             response.put("data", data);
             
             return response;
