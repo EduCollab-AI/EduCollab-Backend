@@ -49,4 +49,35 @@ public class UserService {
             throw new RuntimeException("Failed to update avatar: " + e.getMessage(), e);
         }
     }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getUserById(String userIdStr) {
+        try {
+            if (userIdStr == null || userIdStr.isEmpty()) {
+                throw new RuntimeException("userId is required");
+            }
+            UUID userId = UUID.fromString(userIdStr);
+            User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with ID: " + userIdStr));
+            
+            Map<String, Object> data = new HashMap<>();
+            data.put("user_id", user.getId().toString());
+            data.put("email", user.getEmail());
+            data.put("role", user.getRole());
+            data.put("phone", user.getPhone());
+            data.put("avatar_url", user.getAvatarUrl());
+            data.put("name", user.getName());
+            data.put("created_at", user.getCreatedAt());
+            data.put("updated_at", user.getUpdatedAt());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("data", data);
+            return response;
+        } catch (Exception e) {
+            System.err.println("❌ Error fetching user: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to fetch user: " + e.getMessage(), e);
+        }
+    }
 }

@@ -24,4 +24,11 @@ public class UserController {
         Map<String, Object> result = userService.updateAvatar(userId, avatarUrl);
         return ResponseEntity.ok(result);
     }
+
+    @GetMapping("/{userId}")
+    public ResponseEntity<Map<String, Object>> getUser(@PathVariable String userId) {
+        System.out.println("Get user endpoint accessed for user " + userId);
+        Map<String, Object> result = userService.getUserById(userId);
+        return ResponseEntity.ok(result);
+    }
 }
