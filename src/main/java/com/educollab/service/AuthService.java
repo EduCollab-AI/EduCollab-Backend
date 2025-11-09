@@ -385,11 +385,14 @@ public class AuthService {
             Map<String, Object> userData = new HashMap<>();
             userData.put("id", user.getId().toString());
             userData.put("email", user.getEmail());
-            userData.put("name", user.getName());
             userData.put("role", user.getRole());
-            if (user.getPhone() != null) {
-                userData.put("phone", user.getPhone());
-            }
+            userData.put("name", user.getName());
+            userData.put("user_Name", user.getName());
+            userData.put("phone", user.getPhone());
+            userData.put("avatar_url", user.getAvatarUrl());
+            // Keep camelCase variants for backward compatibility with existing clients
+            userData.put("userName", user.getName());
+            userData.put("avatarUrl", user.getAvatarUrl());
             
             Map<String, Object> data = new HashMap<>();
             data.put("user", userData);
