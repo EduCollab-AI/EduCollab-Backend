@@ -24,5 +24,7 @@ public interface PaymentEventRepository extends JpaRepository<PaymentEvent, UUID
     List<PaymentEvent> findByStudentIdOrderByDueDateDesc(UUID studentId);
     
     List<PaymentEvent> findByPaymentScheduleIdAndDueDateAfter(UUID paymentScheduleId, LocalDate date);
+    
+    List<PaymentEvent> findByStudentIdAndStatusAndDueDateBefore(UUID studentId, String status, LocalDate dueDate);
 }
 
