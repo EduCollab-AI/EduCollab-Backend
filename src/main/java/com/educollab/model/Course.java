@@ -22,7 +22,7 @@ public class Course {
     @Column(name = "description")
     private String description;
     
-    @Column(name = "teacher_name", nullable = false)
+    @Column(name = "teacher_name")
     private String teacherName;
     
     @Column(name = "max_students")

@@ -250,16 +250,24 @@ public class PaymentQueryService {
             return dueDates;
         }
         
-        // Parse RRULE format (e.g., "FREQ=MONTHLY;BYMONTHDAY=5")
+        // Parse RRULE format (e.g., "FREQ=MONTHLY;BYMONTHDAY=5" or "FREQ=WEEKLY;INTERVAL=2;BYDAY=TU")
         if (billingRule.toUpperCase().startsWith("FREQ=")) {
             String[] parts = billingRule.toUpperCase().split(";");
             String freq = null;
+            Integer interval = 1; // Default interval is 1
             Integer byMonthDay = null;
             String byDay = null;
             
             for (String part : parts) {
                 if (part.startsWith("FREQ=")) {
                     freq = part.substring(5);
+                } else if (part.startsWith("INTERVAL=")) {
+                    try {
+                        interval = Integer.parseInt(part.substring(9));
+                    } catch (NumberFormatException e) {
+                        System.err.println("⚠️ Invalid INTERVAL value in RRULE: " + part + ", using default 1");
+                        interval = 1;
+                    }
                 } else if (part.startsWith("BYMONTHDAY=")) {
                     byMonthDay = Integer.parseInt(part.substring(11));
                 } else if (part.startsWith("BYDAY=")) {
@@ -271,6 +279,8 @@ public class PaymentQueryService {
                 freq = "MONTHLY"; // Default for payments
             }
             
+            System.out.println("📅 Parsed RRULE - FREQ: " + freq + ", INTERVAL: " + interval + ", BYDAY: " + byDay + ", BYMONTHDAY: " + byMonthDay);
+            
             LocalDate currentDate = effectiveStartDate;
             
             switch (freq) {
@@ -279,26 +289,42 @@ public class PaymentQueryService {
                         if (!currentDate.isBefore(scheduleStartDate)) {
                             dueDates.add(currentDate);
                         }
-                        currentDate = currentDate.plusDays(1);
+                        currentDate = currentDate.plusDays(interval);
                     }
                     break;
                     
                 case "WEEKLY":
                     DayOfWeek targetDay = parseDayOfWeekString(byDay);
                     if (targetDay == null) {
+                        // If no BYDAY specified, use the start date's day of week
                         targetDay = scheduleStartDate.getDayOfWeek();
+                        System.out.println("ℹ️ No BYDAY specified in RRULE, using schedule start date day: " + targetDay);
+                    } else {
+                        System.out.println("✅ Target day from BYDAY: " + targetDay);
                     }
                     
-                    // Find first occurrence
-                    while (currentDate.getDayOfWeek() != targetDay && !currentDate.isAfter(endDate)) {
-                        currentDate = currentDate.plusDays(1);
+                    // Find first occurrence of target day on or after scheduleStartDate
+                    currentDate = scheduleStartDate;
+                    int daysToAdd = (targetDay.getValue() + 7 - scheduleStartDate.getDayOfWeek().getValue()) % 7;
+                    if (daysToAdd > 0) {
+                        currentDate = scheduleStartDate.plusDays(daysToAdd);
+                    }
+                    // If scheduleStartDate is already the target day, currentDate = scheduleStartDate (daysToAdd = 0)
+                    
+                    // Ensure we start from effectiveStartDate if it's later than the first occurrence
+                    if (currentDate.isBefore(effectiveStartDate)) {
+                        // Find next occurrence of target day on or after effectiveStartDate
+                        int daysFromEffectiveStart = (targetDay.getValue() + 7 - effectiveStartDate.getDayOfWeek().getValue()) % 7;
+                        currentDate = effectiveStartDate.plusDays(daysFromEffectiveStart);
                     }
                     
+                    // Generate events starting from currentDate, incrementing by interval weeks
                     while (!currentDate.isAfter(endDate)) {
                         if (!currentDate.isBefore(scheduleStartDate)) {
                             dueDates.add(currentDate);
                         }
-                        currentDate = currentDate.plusWeeks(1);
+                        // Use interval to determine weeks to skip (e.g., INTERVAL=2 means every 2 weeks)
+                        currentDate = currentDate.plusWeeks(interval);
                     }
                     break;
                     
@@ -309,7 +335,7 @@ public class PaymentQueryService {
                                                   Math.min(byMonthDay, effectiveStartDate.lengthOfMonth()));
                         
                         if (currentDate.isBefore(effectiveStartDate)) {
-                            currentDate = currentDate.plusMonths(1);
+                            currentDate = currentDate.plusMonths(interval);
                             currentDate = LocalDate.of(currentDate.getYear(), currentDate.getMonth(), 
                                                       Math.min(byMonthDay, currentDate.lengthOfMonth()));
                         }
@@ -318,7 +344,7 @@ public class PaymentQueryService {
                             if (!currentDate.isBefore(scheduleStartDate)) {
                                 dueDates.add(currentDate);
                             }
-                            currentDate = currentDate.plusMonths(1);
+                            currentDate = currentDate.plusMonths(interval);
                             if (currentDate.lengthOfMonth() < byMonthDay) {
                                 currentDate = LocalDate.of(currentDate.getYear(), currentDate.getMonth(), 
                                                           currentDate.lengthOfMonth());
@@ -332,11 +358,13 @@ public class PaymentQueryService {
                                      LocalDate.of(effectiveStartDate.getYear(), effectiveStartDate.getMonth(), 
                                                  scheduleStartDate.getDayOfMonth()) : scheduleStartDate;
                         if (currentDate.isBefore(effectiveStartDate)) {
-                            currentDate = currentDate.plusMonths(1);
+                            currentDate = currentDate.plusMonths(interval);
                         }
                         while (!currentDate.isAfter(endDate)) {
-                            dueDates.add(currentDate);
-                            currentDate = currentDate.plusMonths(1);
+                            if (!currentDate.isBefore(scheduleStartDate)) {
+                                dueDates.add(currentDate);
+                            }
+                            currentDate = currentDate.plusMonths(interval);
                             if (currentDate.lengthOfMonth() < scheduleStartDate.getDayOfMonth()) {
                                 currentDate = LocalDate.of(currentDate.getYear(), currentDate.getMonth(), 
                                                           currentDate.lengthOfMonth());

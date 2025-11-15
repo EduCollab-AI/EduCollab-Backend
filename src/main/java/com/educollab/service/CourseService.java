@@ -93,7 +93,10 @@ public class CourseService {
             // Step 1: Create Course entity
             Course course = new Course();
             course.setName(courseName);
-            course.setTeacherName(teacherName);
+            // teacherName is optional
+            if (teacherName != null && !teacherName.isEmpty()) {
+                course.setTeacherName(teacherName);
+            }
             course.setLocation(location);
             course.setTotalSessions(totalSessions);
             course.setDescription(description);
