@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -319,6 +320,170 @@ public class CourseService {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("message", "Failed to deactivate student enrollment: " + e.getMessage());
+            
+            return errorResponse;
+        }
+    }
+    
+    /**
+     * Generate a random 8-character alphanumeric code
+     */
+    private String generateRandomCode() {
+        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        SecureRandom random = new SecureRandom();
+        StringBuilder code = new StringBuilder(8);
+        for (int i = 0; i < 8; i++) {
+            code.append(characters.charAt(random.nextInt(characters.length())));
+        }
+        return code.toString();
+    }
+    
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> createInstitutionCourse(Map<String, Object> request) {
+        try {
+            System.out.println("========================================");
+            System.out.println("🏫 Creating new institution course:");
+            System.out.println("Request: " + request);
+            System.out.println("========================================");
+            
+            // Extract course details
+            String courseName = (String) request.get("courseName");
+            String teacherName = (String) request.get("teacherName");
+            String location = (String) request.get("location");
+            Integer totalSessions = ((Number) request.get("totalSessions")).intValue();
+            String courseStartDateStr = (String) request.get("courseStartDate");
+            
+            // institutionId is required when institution adds a course
+            String institutionIdStr = (String) request.get("institutionId");
+            if (institutionIdStr == null || institutionIdStr.isEmpty()) {
+                throw new RuntimeException("institutionId is required");
+            }
+            // Validate UUID format (could add repository check here if Institution entity exists)
+            @SuppressWarnings("unused")
+            UUID institutionId = UUID.fromString(institutionIdStr);
+            
+            // Optional fields
+            String description = request.get("description") != null ? (String) request.get("description") : null;
+            Integer maxStudents = request.get("maxStudents") != null ? ((Number) request.get("maxStudents")).intValue() : null;
+            
+            System.out.println("Course Name: " + courseName);
+            System.out.println("Teacher Name: " + teacherName);
+            System.out.println("Location: " + location);
+            System.out.println("Total Sessions: " + totalSessions);
+            System.out.println("Course Start Date: " + courseStartDateStr);
+            System.out.println("Institution ID: " + institutionIdStr);
+            System.out.println("Description: " + description);
+            
+            // Parse course start date
+            LocalDate courseStartDate = LocalDate.parse(courseStartDateStr);
+            
+            // Extract schedule array
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> scheduleArray = (List<Map<String, Object>>) request.get("schedule");
+            
+            if (scheduleArray == null || scheduleArray.isEmpty()) {
+                throw new RuntimeException("Schedule array cannot be empty");
+            }
+            
+            System.out.println("Number of schedule entries: " + scheduleArray.size());
+            
+            // Generate random 8-character code
+            String courseCode = generateRandomCode();
+            System.out.println("✅ Generated course code: " + courseCode);
+            
+            // Step 1: Create Course entity
+            Course course = new Course();
+            course.setName(courseName);
+            // teacherName is optional
+            if (teacherName != null && !teacherName.isEmpty()) {
+                course.setTeacherName(teacherName);
+            }
+            course.setLocation(location);
+            course.setTotalSessions(totalSessions);
+            course.setDescription(description);
+            course.setMaxStudents(maxStudents);
+            course.setCode(courseCode);
+            course.setCreatedAt(LocalDateTime.now());
+            course.setUpdatedAt(LocalDateTime.now());
+            
+            // Step 2: Save course to get the course_id
+            Course savedCourse = courseRepository.save(course);
+            UUID courseId = savedCourse.getId();
+            
+            System.out.println("✅ Course saved with ID: " + courseId + " and code: " + courseCode);
+            
+            // Step 3: Process schedule array
+            List<Schedule> schedules = new ArrayList<>();
+            
+            for (Map<String, Object> scheduleEntry : scheduleArray) {
+                String dayOfWeek = (String) scheduleEntry.get("dayOfWeek");
+                String startTimeStr = (String) scheduleEntry.get("startTime");
+                String endTimeStr = (String) scheduleEntry.get("endTime");
+                
+                System.out.println("Processing schedule entry:");
+                System.out.println("  Day of Week: " + dayOfWeek);
+                System.out.println("  Start Time: " + startTimeStr);
+                System.out.println("  End Time: " + endTimeStr);
+                
+                // Parse times
+                LocalTime startTime = LocalTime.parse(startTimeStr);
+                LocalTime endTime = LocalTime.parse(endTimeStr);
+                
+                // Calculate duration in minutes
+                Duration duration = Duration.between(startTime, endTime);
+                Long durationMinutes = duration.toMinutes();
+                
+                System.out.println("  Duration: " + durationMinutes + " minutes");
+                
+                // Calculate first valid date for this day of week
+                LocalDate firstValidDate = calculateFirstValidDate(courseStartDate, dayOfWeek);
+                System.out.println("  First Valid Date: " + firstValidDate);
+                
+                // Create schedule entity
+                Schedule schedule = new Schedule();
+                schedule.setCourseId(courseId);
+                schedule.setDayOfWeek(dayOfWeek);
+                schedule.setStartTime(startTime);
+                schedule.setStartDate(firstValidDate);
+                schedule.setDurationMinutes(durationMinutes);
+                schedule.setRecurrenceRule("weekly");
+                schedule.setCreatedAt(LocalDateTime.now());
+                schedule.setUpdatedAt(LocalDateTime.now());
+                
+                schedules.add(schedule);
+            }
+            
+            // Step 4: Save all schedules
+            List<Schedule> savedSchedules = scheduleRepository.saveAll(schedules);
+            
+            System.out.println("✅ Saved " + savedSchedules.size() + " schedule entries");
+            
+            // Note: Institution course creation does NOT create enrollments
+            // Students will enroll later using the course code
+            
+            System.out.println("========================================");
+            
+            // Step 5: Build response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Institution course created successfully");
+            
+            Map<String, Object> data = new HashMap<>();
+            data.put("courseId", courseId.toString());
+            data.put("code", courseCode);
+            data.put("schedulesCreated", savedSchedules.size());
+            
+            response.put("data", data);
+            
+            return response;
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error creating institution course: " + e.getMessage());
+            e.printStackTrace();
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Failed to create institution course: " + e.getMessage());
             
             return errorResponse;
         }

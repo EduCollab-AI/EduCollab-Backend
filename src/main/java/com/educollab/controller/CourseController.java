@@ -33,6 +33,18 @@ public class CourseController {
         }
     }
     
+    @PostMapping("/institution")
+    public ResponseEntity<Map<String, Object>> createInstitutionCourse(@RequestBody Map<String, Object> request) {
+        System.out.println("Create institution course endpoint accessed with data: " + request);
+        Map<String, Object> result = courseService.createInstitutionCourse(request);
+        
+        if (result.get("success").equals(true)) {
+            return ResponseEntity.status(HttpStatus.CREATED).body(result);
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+        }
+    }
+    
     @DeleteMapping("/{courseId}/enrollments")
     public ResponseEntity<Map<String, Object>> deleteStudentEnrollment(
             @PathVariable String courseId,
